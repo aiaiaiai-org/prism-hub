@@ -47,7 +47,7 @@ jobs:
         run: bundle exec rubocop
 
       - name: Run security analysis
-        run: bundle exec brakeman --no-pager --quiet -w2
+        run: bundle exec brakeman --force --no-pager --quiet -w2
 
       - name: Run tests
         run: bundle exec rails test
