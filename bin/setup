@@ -1,0 +1,15 @@
+#!/usr/bin/env ruby
+# © 2026 aiaiaiai · aiaiaiai.org
+
+require "fileutils"
+
+APP_ROOT = File.expand_path("..", __dir__)
+
+def system!(*command)
+  system(*command, exception: true)
+end
+
+FileUtils.chdir(APP_ROOT) do
+  system!("bundle", "check") unless system("bundle", "check", out: File::NULL)
+  system!("bundle", "exec", "rails", "db:prepare") if ENV["DATABASE_URL"]
+end

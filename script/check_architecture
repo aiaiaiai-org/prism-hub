@@ -1,0 +1,34 @@
+#!/usr/bin/env ruby
+# © 2026 aiaiaiai · aiaiaiai.org
+
+require "pathname"
+
+root = Pathname.new(__dir__).join("..").expand_path
+violations = []
+
+forbidden = {
+  "lib/prism_hub/domain/**/*.rb" => %w[ActiveRecord ENV Open3 Rack Rails],
+  "lib/prism_hub/use_cases/**/*.rb" => %w[ActiveRecord ENV Open3 Rack Rails],
+  "lib/prism_hub/ports/**/*.rb" => %w[ActiveRecord ENV JSON Open3 Rack Rails]
+}
+
+forbidden.each do |pattern, constants|
+  Dir.glob(root.join(pattern)).sort.each do |path|
+    source = File.read(path)
+    constants.each do |constant|
+      violations << "#{Pathname.new(path).relative_path_from(root)} depends on #{constant}" if
+        source.match?(/\b#{Regexp.escape(constant)}\b/)
+    end
+  end
+end
+
+contract = File.read(root.join("openapi/prism-hub.v1.yaml"))
+%w[credential credential_ref channel_ref].each do |private_field|
+  target_section = contract[/PublicationTarget:\n(?<body>.*?)(?=\n    [A-Z][A-Za-z]+:)/m, :body]
+  violations << "public PublicationTarget exposes #{private_field}" if
+    target_section&.match?(/^\s+#{Regexp.escape(private_field)}:/)
+end
+
+abort violations.join("\n") if violations.any?
+
+puts "architecture boundaries are valid"

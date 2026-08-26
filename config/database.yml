@@ -1,0 +1,18 @@
+# © 2026 aiaiaiai · aiaiaiai.org
+
+default: &default
+  adapter: postgresql
+  encoding: unicode
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS", 5) %>
+  url: <%= ENV["DATABASE_URL"] %>
+
+development:
+  <<: *default
+  database: prism_hub_development
+
+test:
+  <<: *default
+  database: prism_hub_test
+
+production:
+  <<: *default

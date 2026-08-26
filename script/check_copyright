@@ -1,0 +1,38 @@
+#!/usr/bin/env ruby
+# © 2026 aiaiaiai · aiaiaiai.org
+
+require "pathname"
+
+SIGNATURE = "© 2026 aiaiaiai · aiaiaiai.org"
+MARKDOWN_FOOTER = "<!-- #{SIGNATURE} -->"
+
+root = Pathname.new(__dir__).join("..").expand_path
+files = Dir.glob(root.join("**/*"), File::FNM_DOTMATCH)
+  .map { Pathname.new(_1) }
+  .select(&:file?)
+  .reject { _1.to_s.include?("/.git/") }
+violations = []
+
+files.each do |path|
+  relative = path.relative_path_from(root).to_s
+  next if %w[.ruby-version Gemfile.lock].include?(relative)
+
+  source = path.read
+  case relative
+  when /\.md\z/
+    violations << "#{relative}: missing canonical footer" unless source.rstrip.end_with?(MARKDOWN_FOOTER)
+  when /\.(rake|rb|yml|yaml)\z/, ".env.example", ".gitignore", ".rubocop.yml", "Gemfile", "Rakefile", "config.ru"
+    lines = source.lines.first(3).join
+    violations << "#{relative}: missing canonical header" unless lines.include?(SIGNATURE)
+  when %r{\A(?:bin|script)/}
+    lines = source.lines.first(3).join
+    violations << "#{relative}: missing canonical header" unless lines.include?(SIGNATURE)
+  end
+end
+
+notice = root.join("NOTICE").read
+violations << "NOTICE: missing canonical signature" unless notice.include?(SIGNATURE)
+
+abort violations.join("\n") if violations.any?
+
+puts "copyright policy is valid"

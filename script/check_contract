@@ -1,0 +1,59 @@
+#!/usr/bin/env ruby
+# © 2026 aiaiaiai · aiaiaiai.org
+
+require "yaml"
+
+require_relative "../lib/prism_hub"
+
+path = File.expand_path("../openapi/prism-hub.v1.yaml", __dir__)
+contract = YAML.safe_load_file(path, aliases: false)
+
+expected_operations = {
+  ["/healthz", "get"] => "getHealth",
+  ["/api/v1/channels", "get"] => "listChannels",
+  ["/api/v1/publications/validate", "post"] => "validatePublication",
+  ["/api/v1/publications", "post"] => "publishPublication"
+}
+
+raise "OpenAPI version drift" unless contract.fetch("openapi") == "3.1.0"
+
+expected_operations.each do |(route, method), operation_id|
+  actual = contract.dig("paths", route, method, "operationId")
+  raise "missing #{method.upcase} #{route} operation" unless actual == operation_id
+end
+
+target_properties = contract.dig(
+  "components",
+  "schemas",
+  "PublicationTarget",
+  "properties"
+).keys.sort
+unless target_properties == %w[channel_id id selection]
+  raise "PublicationTarget must expose only public Hub targeting fields"
+end
+
+formats = contract.dig(
+  "components",
+  "schemas",
+  "ContentVariant",
+  "properties",
+  "format",
+  "enum"
+)
+raise "post and story formats must remain explicit" unless %w[post story].all? { formats.include?(_1) }
+
+example = contract.dig(
+  "paths",
+  "/api/v1/publications",
+  "post",
+  "requestBody",
+  "content",
+  "application/json",
+  "examples",
+  "multiTarget",
+  "value"
+)
+draft = PrismHub::Domain::PublicationDraft.from_hash(example)
+raise "multi-target example must contain two targets" unless draft.targets.length == 2
+
+puts "OpenAPI and executable request contracts are valid"
