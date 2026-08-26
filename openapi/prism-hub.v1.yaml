@@ -3,7 +3,7 @@
 openapi: 3.1.0
 info:
   title: Prism Hub API
-  version: 0.1.0-alpha.1
+  version: 0.1.0-alpha.2
   summary: Versioned client boundary for Prism control-plane operations
   description: >-
     Clients use public Hub channel IDs. Provider channel and credential
@@ -22,6 +22,9 @@ paths:
       responses:
         "200":
           description: Process is running
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestId"
           content:
             application/json:
               schema:
@@ -30,15 +33,26 @@ paths:
     get:
       operationId: listChannels
       summary: List public configured channels
+      description: >-
+        Returns stable public channel IDs together with declared publishing
+        capabilities. Continue with the opaque next_cursor until it is null.
+      parameters:
+        - $ref: "#/components/parameters/PageLimit"
+        - $ref: "#/components/parameters/PageCursor"
       responses:
         "200":
           description: Configured public channel metadata
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestId"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ChannelsResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/InputRejected"
   /api/v1/publications/validate:
     post:
       operationId: validatePublication
@@ -138,12 +152,35 @@ paths:
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
 components:
+  headers:
+    RequestId:
+      description: Server-generated correlation ID for this HTTP request
+      schema:
+        $ref: "#/components/schemas/StableReference"
   securitySchemes:
     BearerAuth:
       type: http
       scheme: bearer
       bearerFormat: opaque
   parameters:
+    PageLimit:
+      name: limit
+      in: query
+      required: false
+      description: Maximum channels to return
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+    PageCursor:
+      name: cursor
+      in: query
+      required: false
+      description: Opaque continuation cursor from the previous page
+      schema:
+        type: string
+        minLength: 1
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -157,36 +194,63 @@ components:
   responses:
     ExecutionResponse:
       description: Prism execution envelope or typed execution rejection
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestId"
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/OperationResponse"
     BadRequest:
       description: Malformed JSON request
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestId"
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
     Unauthorized:
       description: Missing or invalid Hub bearer token
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestId"
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
     PayloadTooLarge:
       description: Request exceeded the configured body limit
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestId"
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
     UnsupportedMediaType:
       description: Content-Type is not application/json
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestId"
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
     ServiceUnavailable:
       description: Prism execution boundary is unavailable
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    InputRejected:
+      description: Query or domain input was rejected with a typed error
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestId"
       content:
         application/json:
           schema:
@@ -207,7 +271,7 @@ components:
     Channel:
       type: object
       additionalProperties: false
-      required: [id, label, provider_id]
+      required: [id, label, provider_id, capabilities]
       properties:
         id:
           $ref: "#/components/schemas/StableReference"
@@ -217,15 +281,57 @@ components:
           maxLength: 120
         provider_id:
           type: string
+        capabilities:
+          $ref: "#/components/schemas/ChannelCapabilities"
+    ChannelCapabilities:
+      type: object
+      additionalProperties: false
+      required: [formats, text, media_kinds]
+      properties:
+        formats:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            enum: [post, story, short_video, poll]
+        text:
+          type: boolean
+        media_kinds:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            enum: [image, video, audio, document]
+      anyOf:
+        - properties:
+            text:
+              const: true
+        - properties:
+            media_kinds:
+              minItems: 1
+    PageInfo:
+      type: object
+      additionalProperties: false
+      required: [limit, next_cursor]
+      properties:
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+        next_cursor:
+          type: [string, "null"]
     ChannelsResponse:
       type: object
       additionalProperties: false
-      required: [channels]
+      required: [channels, page]
       properties:
         channels:
           type: array
           items:
             $ref: "#/components/schemas/Channel"
+        page:
+          $ref: "#/components/schemas/PageInfo"
     PublicationRequest:
       type: object
       additionalProperties: false
@@ -383,10 +489,12 @@ components:
     ErrorResponse:
       type: object
       additionalProperties: false
-      required: [status, error]
+      required: [status, request_id, error]
       properties:
         status:
           const: error
+        request_id:
+          $ref: "#/components/schemas/StableReference"
         error:
           $ref: "#/components/schemas/Error"
     Error:

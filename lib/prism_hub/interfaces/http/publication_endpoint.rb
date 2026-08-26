@@ -23,7 +23,8 @@ module PrismHub
           draft = Domain::PublicationDraft.from_hash(@request_body.parse(request))
           response = @execute_publication.call(
             draft: draft,
-            idempotency_key: idempotency_key
+            idempotency_key: idempotency_key,
+            request_id: request.get_header(App::REQUEST_ID_KEY)
           )
           JsonResponse.call(status_for(response), response)
         end

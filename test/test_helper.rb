@@ -48,6 +48,11 @@ module PrismHubTestSupport
             "label" => "Personal Threads",
             "provider_id" => "meta.threads",
             "channel_ref" => "0x0sky",
+            "capabilities" => {
+              "formats" => ["post"],
+              "text" => true,
+              "media_kinds" => []
+            },
             "credential_ref" => "threads.personal"
           }
         ]

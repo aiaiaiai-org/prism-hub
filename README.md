@@ -53,7 +53,12 @@ The service refuses to boot without a Hub API token of at least 32 characters.
     "label": "Personal Threads",
     "provider_id": "meta.threads",
     "channel_ref": "0x0sky",
-    "credential_ref": "threads.personal"
+    "credential_ref": "threads.personal",
+    "capabilities": {
+      "formats": ["post"],
+      "text": true,
+      "media_kinds": []
+    }
   }
 ]
 ```
@@ -68,7 +73,7 @@ The canonical contract is [`openapi/prism-hub.v1.yaml`](openapi/prism-hub.v1.yam
 | Endpoint | Purpose |
 | --- | --- |
 | `GET /healthz` | Process liveness only |
-| `GET /api/v1/channels` | Public configured channel metadata |
+| `GET /api/v1/channels` | Paginated public channels and publishing capabilities |
 | `POST /api/v1/publications/validate` | Complete Prism preflight, no publish action |
 | `POST /api/v1/publications` | Explicit multi-target publish request |
 
@@ -76,6 +81,11 @@ API calls require `Authorization: Bearer …`; publication calls also require an
 `Idempotency-Key` header. Validation never crosses the provider publish
 boundary. Publication behavior is selected explicitly with
 `require_all_valid` or `independent`.
+
+Channel discovery accepts `limit` (1–100, default 50) and an opaque `cursor`.
+Every HTTP response carries `X-Request-ID`; typed HTTP error bodies repeat the
+same value as `request_id` for support correlation. Channel capabilities are
+declarative configuration and must match the active Prism provider adapter.
 
 ## Verification
 

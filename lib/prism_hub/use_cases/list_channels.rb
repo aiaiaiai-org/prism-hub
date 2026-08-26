@@ -7,9 +7,11 @@ module PrismHub
         @channel_repository = channel_repository
       end
 
-      def call
+      def call(limit:, after_id: nil)
+        page = @channel_repository.page(limit: limit, after_id: after_id)
         {
-          "channels" => @channel_repository.all.map(&:public_attributes)
+          "channels" => page.channels.map(&:public_attributes),
+          "next_after_id" => page.next_after_id
         }
       end
     end

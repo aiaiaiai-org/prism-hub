@@ -6,7 +6,7 @@ module PrismHub
       OPERATIONS = %w[publish validate].freeze
       IDEMPOTENCY_PATTERN = /\A[!-~]{1,256}\z/
 
-      def initialize(operation:, channel_repository:, execution_gateway:, request_id_factory:)
+      def initialize(operation:, channel_repository:, execution_gateway:)
         unless OPERATIONS.include?(operation)
           raise ArgumentError, "unsupported Prism execution operation"
         end
@@ -14,18 +14,17 @@ module PrismHub
         @operation = operation.freeze
         @channel_repository = channel_repository
         @execution_gateway = execution_gateway
-        @request_id_factory = request_id_factory
       end
 
-      def call(draft:, idempotency_key:)
+      def call(draft:, idempotency_key:, request_id:)
         normalized_key = normalize_idempotency_key(idempotency_key)
+        normalized_request_id = normalize_request_id(request_id)
         channels = draft.targets.to_h do |target|
           [target.channel_id, @channel_repository.find(target.channel_id)]
         end
-        request_id = @request_id_factory.call
         envelope = {
           "protocol_version" => "prism-execution.v1",
-          "request_id" => request_id,
+          "request_id" => normalized_request_id,
           "operation" => @operation,
           "payload" => draft.prism_payload(
             idempotency_key: normalized_key,
@@ -36,6 +35,16 @@ module PrismHub
       end
 
       private
+
+      def normalize_request_id(value)
+        string = String(value)
+        return string.freeze if Domain::Channel::REFERENCE_PATTERN.match?(string)
+
+        raise InputError.new(
+          "hub.request_id.invalid",
+          "request id must be a non-empty stable reference"
+        )
+      end
 
       def normalize_idempotency_key(value)
         string = String(value)

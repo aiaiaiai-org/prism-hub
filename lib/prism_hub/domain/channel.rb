@@ -6,14 +6,15 @@ module PrismHub
       REFERENCE_PATTERN = /\A[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\z/
       PROVIDER_PATTERN = /\A[a-z0-9]+(?:[._-][a-z0-9]+)+\z/
 
-      attr_reader :id, :label, :provider_id, :channel_ref, :credential_ref
+      attr_reader :id, :label, :provider_id, :channel_ref, :credential_ref, :capabilities
 
-      def initialize(id:, label:, provider_id:, channel_ref:, credential_ref: nil)
+      def initialize(id:, label:, provider_id:, channel_ref:, capabilities:, credential_ref: nil)
         @id = required_reference(id, "id")
         @label = required_label(label)
         @provider_id = required_provider(provider_id)
         @channel_ref = required_reference(channel_ref, "channel_ref")
         @credential_ref = optional_reference(credential_ref, "credential_ref")
+        @capabilities = capabilities_value(capabilities)
         freeze
       end
 
@@ -21,7 +22,8 @@ module PrismHub
         {
           "id" => id,
           "label" => label,
-          "provider_id" => provider_id
+          "provider_id" => provider_id,
+          "capabilities" => capabilities.public_attributes
         }.freeze
       end
 
@@ -37,6 +39,15 @@ module PrismHub
       end
 
       private
+
+      def capabilities_value(value)
+        return value if value.is_a?(ChannelCapabilities)
+
+        raise InputError.new(
+          "hub.channel.capabilities.invalid",
+          "capabilities must be an immutable ChannelCapabilities value"
+        )
+      end
 
       def required_reference(value, field)
         string = String(value)

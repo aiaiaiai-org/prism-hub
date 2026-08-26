@@ -9,12 +9,28 @@ class HttpAppTest < Minitest::Test
     response = request.get("/healthz")
 
     assert_equal 200, response.status
+    assert_equal "request-test-1", response["x-request-id"]
   end
 
   def test_api_requires_bearer_authentication
     response = request.get("/api/v1/channels")
 
     assert_equal 401, response.status
+    assert_equal "request-test-1", response["x-request-id"]
+    assert_equal "request-test-1", JSON.parse(response.body).fetch("request_id")
+  end
+
+  def test_channels_expose_capabilities_and_page_metadata
+    response = request.get(
+      "/api/v1/channels?limit=1",
+      "HTTP_AUTHORIZATION" => "Bearer #{TOKEN}"
+    )
+
+    payload = JSON.parse(response.body)
+    assert_equal 200, response.status
+    assert_equal ["post"], payload.dig("channels", 0, "capabilities", "formats")
+    assert_equal 1, payload.dig("page", "limit")
+    assert_nil payload.dig("page", "next_cursor")
   end
 
   def test_publish_accepts_only_public_channel_ids
@@ -43,8 +59,7 @@ class HttpAppTest < Minitest::Test
     use_case = PrismHub::UseCases::ExecutePublication.new(
       operation: "publish",
       channel_repository: channels,
-      execution_gateway: gateway,
-      request_id_factory: request_ids
+      execution_gateway: gateway
     )
 
     PrismHub::Interfaces::Http::App.new(
@@ -59,7 +74,8 @@ class HttpAppTest < Minitest::Test
           request_body: PrismHub::Interfaces::Http::RequestBody.new
         )
       },
-      logger: Logger.new(StringIO.new)
+      logger: Logger.new(StringIO.new),
+      request_id_factory: request_ids
     )
   end
 end
