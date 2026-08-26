@@ -6,3 +6,9 @@ inherit_gem:
 AllCops:
   NewCops: enable
   TargetRubyVersion: 4.0
+
+Layout/SpaceInsideArrayLiteralBrackets:
+  EnforcedStyle: no_space
+
+Layout/SpaceInsideHashLiteralBraces:
+  EnforcedStyle: no_space
