@@ -1,6 +1,6 @@
 # © 2026 aiaiaiai · aiaiaiai.org
 
-require_relative "../test_helper"
+require_relative "../../test_helper"
 
 class HttpAppTest < Minitest::Test
   TOKEN = "test-hub-token-that-is-longer-than-32-characters"
