@@ -1,0 +1,407 @@
+# © 2026 aiaiaiai · aiaiaiai.org
+
+openapi: 3.1.0
+info:
+  title: Prism Hub API
+  version: 0.1.0-alpha.1
+  summary: Versioned client boundary for Prism control-plane operations
+  description: >-
+    Clients use public Hub channel IDs. Provider channel and credential
+    references remain server-side and are expanded only before invoking
+    prism-execution.v1.
+servers:
+  - url: http://localhost:3000
+security:
+  - BearerAuth: []
+paths:
+  /healthz:
+    get:
+      operationId: getHealth
+      summary: Check process liveness
+      security: []
+      responses:
+        "200":
+          description: Process is running
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+  /api/v1/channels:
+    get:
+      operationId: listChannels
+      summary: List public configured channels
+      responses:
+        "200":
+          description: Configured public channel metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChannelsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/publications/validate:
+    post:
+      operationId: validatePublication
+      summary: Run deterministic preflight without publishing
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublicationRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/ExecutionResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/ExecutionResponse"
+        "502":
+          $ref: "#/components/responses/ExecutionResponse"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/publications:
+    post:
+      operationId: publishPublication
+      summary: Publish one explicit multi-target request
+      description: >-
+        This operation may perform irreversible external actions. Dispatch
+        behavior is controlled by the request's explicit dispatch_policy.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublicationRequest"
+            examples:
+              multiTarget:
+                summary: Provider-neutral post and story variants
+                value:
+                  dispatch_policy: require_all_valid
+                  variants:
+                    - id: personal-post
+                      locale: uk-UA
+                      voice_profile: 0x0sky.uk_SP
+                      format: post
+                      body:
+                        text: привіт із Prism
+                      provenance:
+                        kind: human
+                    - id: personal-story
+                      locale: uk-UA
+                      voice_profile: 0x0sky.uk_SP
+                      format: story
+                      body:
+                        media:
+                          - ref: media-cover-1
+                            kind: image
+                            mime_type: image/webp
+                            alt_text: Фіолетове світло Prism
+                      provenance:
+                        kind: human
+                  targets:
+                    - id: threads-post
+                      channel_id: personal-threads
+                      selection:
+                        mode: exact
+                        variant_id: personal-post
+                    - id: instagram-story
+                      channel_id: personal-instagram-story
+                      selection:
+                        mode: exact
+                        variant_id: personal-story
+      responses:
+        "200":
+          $ref: "#/components/responses/ExecutionResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/ExecutionResponse"
+        "502":
+          $ref: "#/components/responses/ExecutionResponse"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Stable key for one logical multi-target publication
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 256
+        pattern: "^[!-~]+$"
+  responses:
+    ExecutionResponse:
+      description: Prism execution envelope or typed execution rejection
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/OperationResponse"
+    BadRequest:
+      description: Malformed JSON request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Missing or invalid Hub bearer token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    PayloadTooLarge:
+      description: Request exceeded the configured body limit
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    UnsupportedMediaType:
+      description: Content-Type is not application/json
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ServiceUnavailable:
+      description: Prism execution boundary is unavailable
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+  schemas:
+    StableReference:
+      type: string
+      pattern: "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    HealthResponse:
+      type: object
+      additionalProperties: false
+      required: [status, service]
+      properties:
+        status:
+          const: ok
+        service:
+          const: prism-hub
+    Channel:
+      type: object
+      additionalProperties: false
+      required: [id, label, provider_id]
+      properties:
+        id:
+          $ref: "#/components/schemas/StableReference"
+        label:
+          type: string
+          minLength: 1
+          maxLength: 120
+        provider_id:
+          type: string
+    ChannelsResponse:
+      type: object
+      additionalProperties: false
+      required: [channels]
+      properties:
+        channels:
+          type: array
+          items:
+            $ref: "#/components/schemas/Channel"
+    PublicationRequest:
+      type: object
+      additionalProperties: false
+      required: [variants, targets]
+      properties:
+        dispatch_policy:
+          type: string
+          enum: [require_all_valid, independent]
+          default: require_all_valid
+        variants:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/ContentVariant"
+        targets:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/PublicationTarget"
+    ContentVariant:
+      type: object
+      additionalProperties: false
+      required: [id, locale, format, body, provenance]
+      properties:
+        id:
+          $ref: "#/components/schemas/StableReference"
+        locale:
+          type: string
+          minLength: 2
+          description: BCP-47 content locale
+        voice_profile:
+          $ref: "#/components/schemas/StableReference"
+        audience:
+          $ref: "#/components/schemas/Audience"
+        format:
+          type: string
+          enum: [post, story, short_video, poll]
+        body:
+          $ref: "#/components/schemas/ContentBody"
+        provenance:
+          $ref: "#/components/schemas/Provenance"
+    Audience:
+      type: object
+      additionalProperties: false
+      properties:
+        country:
+          type: string
+          pattern: "^[A-Z]{2}$"
+        region:
+          type: string
+          minLength: 1
+        city:
+          type: string
+          minLength: 1
+        segment:
+          type: string
+          minLength: 1
+    ContentBody:
+      type: object
+      additionalProperties: false
+      properties:
+        text:
+          type: string
+          minLength: 1
+        media:
+          type: array
+          items:
+            $ref: "#/components/schemas/Media"
+      anyOf:
+        - required: [text]
+        - required: [media]
+    Media:
+      type: object
+      additionalProperties: false
+      required: [ref, kind]
+      properties:
+        ref:
+          $ref: "#/components/schemas/StableReference"
+        kind:
+          type: string
+          enum: [image, video, audio, document]
+        mime_type:
+          type: string
+        alt_text:
+          type: string
+    Provenance:
+      type: object
+      additionalProperties: false
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          enum: [human, import, deterministic_transform, ai]
+        producer:
+          type: string
+        source_refs:
+          type: array
+          items:
+            type: string
+    PublicationTarget:
+      type: object
+      additionalProperties: false
+      required: [id, channel_id, selection]
+      properties:
+        id:
+          $ref: "#/components/schemas/StableReference"
+        channel_id:
+          $ref: "#/components/schemas/StableReference"
+        selection:
+          oneOf:
+            - $ref: "#/components/schemas/ExactSelection"
+            - $ref: "#/components/schemas/OrderedSelection"
+    ExactSelection:
+      type: object
+      additionalProperties: false
+      required: [mode, variant_id]
+      properties:
+        mode:
+          const: exact
+        variant_id:
+          $ref: "#/components/schemas/StableReference"
+    OrderedSelection:
+      type: object
+      additionalProperties: false
+      required: [mode, variant_ids]
+      properties:
+        mode:
+          const: ordered
+        variant_ids:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/StableReference"
+    ExecutionResponse:
+      type: object
+      required: [protocol_version, request_id, status]
+      properties:
+        protocol_version:
+          const: prism-execution.v1
+        request_id:
+          type: string
+        status:
+          type: string
+          enum: [ok, error]
+        result:
+          type: object
+          additionalProperties: true
+        error:
+          $ref: "#/components/schemas/Error"
+    OperationResponse:
+      oneOf:
+        - $ref: "#/components/schemas/ExecutionResponse"
+        - $ref: "#/components/schemas/ErrorResponse"
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [status, error]
+      properties:
+        status:
+          const: error
+        error:
+          $ref: "#/components/schemas/Error"
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+        issues:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
