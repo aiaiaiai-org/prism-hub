@@ -5,6 +5,8 @@
 - Clean Architecture object boundaries and explicit composition root;
 - server-side channel configuration with public/private field separation;
 - bearer-authenticated channel, validation, and publication endpoints;
+- paginated channel capability discovery with opaque cursors;
+- one server-generated request ID across the HTTP and Prism execution boundary;
 - multi-target mapping to `prism-execution.v1`;
 - bounded process execution, timeout, output limits, response correlation, and
   safe error mapping;

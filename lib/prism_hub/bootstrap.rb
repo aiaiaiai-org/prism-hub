@@ -17,14 +17,12 @@ module PrismHub
         validate = execution_use_case(
           "validate",
           channels: channels,
-          gateway: gateway,
-          request_ids: request_ids
+          gateway: gateway
         )
         publish = execution_use_case(
           "publish",
           channels: channels,
-          gateway: gateway,
-          request_ids: request_ids
+          gateway: gateway
         )
 
         Interfaces::Http::App.new(
@@ -34,7 +32,8 @@ module PrismHub
           health_endpoint: Interfaces::Http::HealthEndpoint.new,
           routes: {
             ["GET", "/api/v1/channels"] => Interfaces::Http::ChannelsEndpoint.new(
-              list_channels: list_channels
+              list_channels: list_channels,
+              cursor: Interfaces::Http::ChannelCursor.new
             ),
             ["POST", "/api/v1/publications/validate"] => Interfaces::Http::PublicationEndpoint.new(
               execute_publication: validate,
@@ -45,7 +44,8 @@ module PrismHub
               request_body: request_body
             )
           },
-          logger: logger
+          logger: logger,
+          request_id_factory: request_ids
         )
       rescue KeyError => error
         raise ConfigurationError.new(
@@ -68,12 +68,11 @@ module PrismHub
         Adapters::SubprocessExecutionGateway.new(runner: runner, logger: logger)
       end
 
-      def execution_use_case(operation, channels:, gateway:, request_ids:)
+      def execution_use_case(operation, channels:, gateway:)
         UseCases::ExecutePublication.new(
           operation: operation,
           channel_repository: channels,
-          execution_gateway: gateway,
-          request_id_factory: request_ids
+          execution_gateway: gateway
         )
       end
 

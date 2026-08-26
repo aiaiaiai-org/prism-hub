@@ -20,10 +20,12 @@ module PrismHub
           ]
         end
 
-        def error(status, code, message, details: nil)
+        def error(status, code, message, details: nil, request_id: nil)
           error = {"code" => code, "message" => message}
           error["details"] = details if details
-          call(status, {"status" => "error", "error" => error})
+          payload = {"status" => "error", "error" => error}
+          payload["request_id"] = request_id if request_id
+          call(status, payload)
         end
       end
     end

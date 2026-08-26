@@ -3,7 +3,7 @@
 module PrismHub
   module Ports
     class ChannelRepository
-      def all
+      def page(limit:, after_id: nil)
         raise NotImplementedError
       end
 

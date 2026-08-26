@@ -42,6 +42,18 @@ formats = contract.dig(
 )
 raise "post and story formats must remain explicit" unless %w[post story].all? { formats.include?(_1) }
 
+channel_required = contract.dig("components", "schemas", "Channel", "required")
+raise "channels must declare capabilities" unless channel_required.include?("capabilities")
+
+channel_parameters = contract.dig("paths", "/api/v1/channels", "get", "parameters")
+parameter_refs = channel_parameters.map { |parameter| parameter.fetch("$ref") }
+unless %w[#/components/parameters/PageCursor #/components/parameters/PageLimit].all? { |ref| parameter_refs.include?(ref) }
+  raise "channel discovery must expose cursor pagination"
+end
+
+error_required = contract.dig("components", "schemas", "ErrorResponse", "required")
+raise "typed HTTP errors must include request_id" unless error_required.include?("request_id")
+
 example = contract.dig(
   "paths",
   "/api/v1/publications",

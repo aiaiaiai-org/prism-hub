@@ -10,7 +10,11 @@ class ExecutePublicationTest < Minitest::Test
       PrismHubTestSupport.publication_hash
     )
 
-    use_case.call(draft: draft, idempotency_key: "telegram:42:100")
+    use_case.call(
+      draft: draft,
+      idempotency_key: "telegram:42:100",
+      request_id: "request-test-1"
+    )
 
     envelope = gateway.envelopes.fetch(0)
     target = envelope.dig("payload", "targets", 0)
@@ -28,7 +32,11 @@ class ExecutePublicationTest < Minitest::Test
     draft = PrismHub::Domain::PublicationDraft.from_hash(value)
 
     error = assert_raises(PrismHub::UnknownChannelError) do
-      build_use_case(gateway).call(draft: draft, idempotency_key: "key-1")
+      build_use_case(gateway).call(
+        draft: draft,
+        idempotency_key: "key-1",
+        request_id: "request-test-1"
+      )
     end
 
     assert_equal "hub.channel.not_found", error.code
@@ -41,8 +49,7 @@ class ExecutePublicationTest < Minitest::Test
     PrismHub::UseCases::ExecutePublication.new(
       operation: "publish",
       channel_repository: PrismHubTestSupport.channels,
-      execution_gateway: gateway,
-      request_id_factory: PrismHubTestSupport::FixedRequestIdFactory.new
+      execution_gateway: gateway
     )
   end
 end

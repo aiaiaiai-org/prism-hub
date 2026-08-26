@@ -3,7 +3,7 @@
 module PrismHub
   module Adapters
     class EnvironmentChannelRepository < Ports::ChannelRepository
-      CHANNEL_KEYS = %w[channel_ref credential_ref id label provider_id].freeze
+      CHANNEL_KEYS = %w[capabilities channel_ref credential_ref id label provider_id].freeze
 
       def initialize(source)
         values = parse(source)
@@ -20,8 +20,15 @@ module PrismHub
         @channels.freeze
       end
 
-      def all
-        @channels.values
+      def page(limit:, after_id: nil)
+        ordered = @channels.values.sort_by(&:id)
+        start = page_start(ordered, after_id)
+        values = ordered.slice(start, limit) || []
+        has_more = (start + values.length) < ordered.length
+        Domain::ChannelPage.new(
+          channels: values,
+          next_after_id: has_more ? values.last.id : nil
+        )
       end
 
       def find(id)
@@ -29,6 +36,18 @@ module PrismHub
       end
 
       private
+
+      def page_start(ordered, after_id)
+        return 0 if after_id.nil?
+
+        index = ordered.index { |channel| channel.id == after_id }
+        return index + 1 if index
+
+        raise InputError.new(
+          "hub.channels.cursor.invalid",
+          "cursor does not identify a configured channel"
+        )
+      end
 
       def parse(source)
         value = JSON.parse(source)
@@ -67,6 +86,7 @@ module PrismHub
           label: value.fetch("label"),
           provider_id: value.fetch("provider_id"),
           channel_ref: value.fetch("channel_ref"),
+          capabilities: Domain::ChannelCapabilities.from_hash(value.fetch("capabilities")),
           credential_ref: value["credential_ref"]
         )
       rescue KeyError => error
