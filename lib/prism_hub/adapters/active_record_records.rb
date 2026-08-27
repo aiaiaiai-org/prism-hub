@@ -55,6 +55,10 @@ module PrismHub
           class_name: "PrismHub::Adapters::ActiveRecordRecords::ServicePrincipal",
           inverse_of: :channel_grants
       end
+
+      class UserIdentity < ::ActiveRecord::Base
+        self.table_name = "user_identities"
+      end
     end
   end
 end
