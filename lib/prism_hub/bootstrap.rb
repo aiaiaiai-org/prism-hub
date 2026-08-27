@@ -14,6 +14,10 @@ module PrismHub
         )
 
         list_channels = UseCases::ListChannels.new(channel_repository: channels)
+        resolve_actor = UseCases::ResolveWorkspaceActor.new(
+          binding_repository: Adapters::ActiveRecordProviderIdentityBindingRepository.new,
+          workspace_membership_repository: Adapters::ActiveRecordWorkspaceMembershipRepository.new
+        )
         validate = execution_use_case(
           "validate",
           channels: channels,
@@ -35,6 +39,10 @@ module PrismHub
           authenticator: authenticator,
           health_endpoint: Interfaces::Http::HealthEndpoint.new,
           routes: {
+            ["POST", "/api/v1/actors/resolve"] => Interfaces::Http::ActorResolutionEndpoint.new(
+              resolve_workspace_actor: resolve_actor,
+              request_body: request_body
+            ),
             ["GET", "/api/v1/channels"] => Interfaces::Http::ChannelsEndpoint.new(
               list_channels: list_channels,
               cursor: Interfaces::Http::ChannelCursor.new

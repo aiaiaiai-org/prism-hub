@@ -6,6 +6,7 @@ module PrismHub
       class App
         REQUEST_ID_KEY = "prism_hub.request_id".freeze
         API_PATHS = %w[
+          /api/v1/actors/resolve
           /api/v1/channels
           /api/v1/publications
           /api/v1/publications/validate
@@ -101,7 +102,9 @@ module PrismHub
 
         def input_status(error)
           case error.code
-          when "hub.http.body.invalid_json"
+          when "hub.http.body.invalid_json", "hub.actor.request.invalid"
+            400
+          when /^hub\.provider_subject\./
             400
           when "hub.http.body.too_large"
             413

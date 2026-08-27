@@ -17,6 +17,7 @@
 - generic workspace actor resolution combining machine capability, provider evidence, human identity, and active workspace membership;
 - immutable `WorkspaceActorContext` preserving machine/human identity separation;
 - `actors:resolve` machine capability and non-enumerating actor authorization failure semantics;
+- versioned `POST /api/v1/actors/resolve` exposing only canonical human identity and workspace role;
 - immutable `AuthorisationContext` returned by scoped credential authentication;
 - scoped HTTP bearer authentication with explicit `401` for invalid credentials;
 - explicit `403` capability and channel-grant enforcement in application use cases;
@@ -25,7 +26,7 @@
 - legacy global bearer bridge disabled by default and activated only by an explicit migration flag;
 - PostgreSQL migrations with foreign keys, uniqueness constraints, status checks, and identity-state invariants;
 - CI PostgreSQL service, matching PostgreSQL client, migration rollback/reapply verification, and deterministic SQL schema drift checks;
-- versioned `v1` endpoints for channel discovery, validation, and publication;
+- versioned `v1` endpoints for actor resolution, channel discovery, validation, and publication;
 - paginated channel capability discovery with opaque cursors;
 - one server-generated request ID across the HTTP and Prism execution boundary;
 - multi-target mapping to `prism-execution.v1`;
@@ -34,7 +35,6 @@
 
 ## Explicitly not implemented
 
-- HTTP exposure of workspace actor resolution;
 - Telegram actor resolution in `prism-bot`;
 - explicit audited provider-identity ownership transfer;
 - explicit workspace membership role-change or reactivation operations;
@@ -51,11 +51,10 @@
 
 ## Next executable increments
 
-1. Expose generic workspace actor resolution through the versioned Hub API with `401`/`403` and non-enumerating response semantics.
-2. Adapt Telegram numeric user IDs in `prism-bot` to the generic Hub provider-subject contract.
-3. Add persistent Hub-owned bot lifecycle state (`active`, `paused`, `disabled`).
-4. Expose the focused lifecycle operations needed for `/stop`, `/resume`, `/status`, and `/cancel`.
-5. Add Meta OAuth with encrypted provider credential storage after the actor and lifecycle boundaries are stable.
-6. Wire production packaging and infrastructure before activating live OAuth callbacks.
+1. Adapt Telegram numeric user IDs in `prism-bot` to the generic Hub provider-subject contract.
+2. Add persistent Hub-owned bot lifecycle state (`active`, `paused`, `disabled`).
+3. Expose the focused lifecycle operations needed for `/stop`, `/resume`, `/status`, and `/cancel`.
+4. Add Meta OAuth with encrypted provider credential storage after the actor and lifecycle boundaries are stable.
+5. Wire production packaging and infrastructure before activating live OAuth callbacks.
 
 <!-- © 2026 aiaiaiai · aiaiaiai.org -->
