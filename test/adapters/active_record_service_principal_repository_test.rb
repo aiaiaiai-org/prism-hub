@@ -47,6 +47,15 @@ class ActiveRecordServicePrincipalRepositoryTest < Minitest::Test
     assert_equal "hub.service_principal.bot_instance_mismatch", error.code
   end
 
+  def test_unknown_capability_is_rejected_before_persistence
+    error = assert_raises(ArgumentError) do
+      provision(capabilities: ["publications:publsih"])
+    end
+
+    assert_equal "capability is not supported by this Hub API version", error.message
+    assert_equal 0, PrismHub::Adapters::ActiveRecordRecords::ServicePrincipal.count
+  end
+
   private
 
   def provision(

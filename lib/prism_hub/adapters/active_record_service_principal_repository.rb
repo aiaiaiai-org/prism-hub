@@ -14,6 +14,7 @@ module PrismHub
 
         ::ActiveRecord::Base.transaction do
           workspace = find_or_create_workspace(workspace_ref)
+          workspace.lock!
           principal = ActiveRecordRecords::ServicePrincipal.lock.find_by(
             workspace: workspace,
             identifier: principal_ref
@@ -34,9 +35,12 @@ module PrismHub
           principal.identifier
         end
       rescue ::ActiveRecord::RecordNotUnique
-        raise ServicePrincipalConflictError.new(
-          "hub.service_principal.conflict",
-          "service principal identity or bot instance is already bound"
+        verify_concurrent_provisioning!(
+          workspace_ref,
+          principal_ref,
+          bot_ref,
+          normalized_capabilities,
+          normalized_channels
         )
       end
 
@@ -46,7 +50,12 @@ module PrismHub
         workspace = ActiveRecordRecords::Workspace.find_or_create_by!(identifier: identifier) do |record|
           record.status = STATUS_ACTIVE
         end
-        return workspace if workspace.status == STATUS_ACTIVE
+        ensure_workspace_active!(workspace)
+        workspace
+      end
+
+      def ensure_workspace_active!(workspace)
+        return if workspace.status == STATUS_ACTIVE
 
         raise ServicePrincipalConflictError.new(
           "hub.workspace.disabled",
@@ -64,6 +73,24 @@ module PrismHub
         capabilities.each { |capability| principal.capability_grants.create!(capability: capability) }
         channel_ids.each { |channel_id| principal.channel_grants.create!(channel_id: channel_id) }
         principal
+      end
+
+      def verify_concurrent_provisioning!(workspace_id, principal_id, bot_instance_id, capabilities, channel_ids)
+        workspace = ActiveRecordRecords::Workspace.find_by(identifier: workspace_id)
+        principal = workspace && ActiveRecordRecords::ServicePrincipal.find_by(
+          workspace: workspace,
+          identifier: principal_id
+        )
+        unless principal
+          raise ServicePrincipalConflictError.new(
+            "hub.service_principal.conflict",
+            "service principal identity or bot instance is already bound"
+          )
+        end
+
+        ensure_workspace_active!(workspace)
+        verify_existing!(principal, bot_instance_id, capabilities, channel_ids)
+        principal.identifier
       end
 
       def verify_existing!(principal, bot_instance_id, capabilities, channel_ids)
@@ -96,6 +123,9 @@ module PrismHub
           string = String(value)
           unless Domain::AuthorisationContext::CAPABILITY_PATTERN.match?(string)
             raise ArgumentError, "capability must use a namespace:action reference"
+          end
+          unless Domain::Capabilities::ALL.include?(string)
+            raise ArgumentError, "capability is not supported by this Hub API version"
           end
           string
         end.uniq.sort.freeze

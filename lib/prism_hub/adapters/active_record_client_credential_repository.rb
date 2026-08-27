@@ -102,9 +102,23 @@ module PrismHub
       end
 
       def find_active_principal!(workspace_id, principal_id)
-        principal = ActiveRecordRecords::ServicePrincipal.joins(:workspace).lock.find_by(
-          identifier: principal_id,
-          workspaces: {identifier: workspace_id}
+        workspace = ActiveRecordRecords::Workspace.lock.find_by(identifier: workspace_id)
+        unless workspace
+          raise ServicePrincipalNotFoundError.new(
+            "hub.service_principal.not_found",
+            "service principal does not exist"
+          )
+        end
+        if workspace.status != STATUS_ACTIVE
+          raise ServicePrincipalConflictError.new(
+            "hub.workspace.disabled",
+            "disabled workspaces cannot issue client credentials"
+          )
+        end
+
+        principal = ActiveRecordRecords::ServicePrincipal.lock.find_by(
+          workspace: workspace,
+          identifier: principal_id
         )
         unless principal
           raise ServicePrincipalNotFoundError.new(
@@ -112,13 +126,10 @@ module PrismHub
             "service principal does not exist"
           )
         end
-
-        workspace = principal.workspace
-        workspace.lock!
-        if principal.status != STATUS_ACTIVE || workspace.status != STATUS_ACTIVE
+        if principal.status != STATUS_ACTIVE
           raise ServicePrincipalConflictError.new(
             "hub.service_principal.disabled",
-            "disabled service principals or workspaces cannot receive client credentials"
+            "disabled service principals cannot receive client credentials"
           )
         end
 
