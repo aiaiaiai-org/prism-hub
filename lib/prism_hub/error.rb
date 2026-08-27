@@ -15,4 +15,6 @@ module PrismHub
   class UnknownChannelError < Error; end
   class ExecutionUnavailableError < Error; end
   class ConfigurationError < Error; end
+  class CredentialConflictError < Error; end
+  class CredentialNotFoundError < Error; end
 end
