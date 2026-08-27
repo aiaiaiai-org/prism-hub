@@ -103,7 +103,24 @@ CREATE TABLE public.service_principals (
     status character varying(32) DEFAULT 'active'::character varying NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
-    CONSTRAINT service_principals_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'disabled'::character varying])::text[])))
+    CONSTRAINT service_principals_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('disabled'::character varying)::text])))
+);
+
+
+--
+-- Name: user_identities; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.user_identities (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    canonical_type character varying(32) NOT NULL,
+    canonical_id character varying(255) NOT NULL,
+    status character varying(32) DEFAULT 'active'::character varying NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL,
+    CONSTRAINT user_identities_canonical_id_check CHECK (((char_length((canonical_id)::text) >= 1) AND (char_length((canonical_id)::text) <= 255))),
+    CONSTRAINT user_identities_canonical_type_check CHECK (((canonical_type)::text = 'person'::text)),
+    CONSTRAINT user_identities_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'disabled'::character varying])::text[])))
 );
 
 
@@ -117,7 +134,7 @@ CREATE TABLE public.workspaces (
     status character varying(32) DEFAULT 'active'::character varying NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
-    CONSTRAINT workspaces_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'disabled'::character varying])::text[])))
+    CONSTRAINT workspaces_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('disabled'::character varying)::text])))
 );
 
 
@@ -167,6 +184,14 @@ ALTER TABLE ONLY public.schema_migrations
 
 ALTER TABLE ONLY public.service_principals
     ADD CONSTRAINT service_principals_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user_identities user_identities_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_identities
+    ADD CONSTRAINT user_identities_pkey PRIMARY KEY (id);
 
 
 --
@@ -241,6 +266,13 @@ CREATE UNIQUE INDEX index_service_principals_on_workspace_id_and_identifier ON p
 
 
 --
+-- Name: index_user_identities_on_canonical_type_and_canonical_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_user_identities_on_canonical_type_and_canonical_id ON public.user_identities USING btree (canonical_type, canonical_id);
+
+
+--
 -- Name: index_workspaces_on_identifier; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -286,5 +318,6 @@ ALTER TABLE ONLY public.service_principals
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260827112400'),
 ('20260827094700');
 
