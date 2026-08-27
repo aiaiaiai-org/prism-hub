@@ -99,7 +99,7 @@ CREATE TABLE public.provider_identity_bindings (
     CONSTRAINT provider_identity_bindings_provider_check CHECK (((provider)::text ~ '^[a-z][a-z0-9._-]{0,63}$'::text)),
     CONSTRAINT provider_identity_bindings_scope_check CHECK (((provider_scope)::text ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'::text)),
     CONSTRAINT provider_identity_bindings_state_check CHECK (((((status)::text = 'active'::text) AND (revoked_at IS NULL)) OR (((status)::text = 'revoked'::text) AND (revoked_at IS NOT NULL)))),
-    CONSTRAINT provider_identity_bindings_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'revoked'::character varying])::text[]))),
+    CONSTRAINT provider_identity_bindings_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('revoked'::character varying)::text]))),
     CONSTRAINT provider_identity_bindings_subject_check CHECK ((char_length((subject_id)::text) > 0))
 );
 
@@ -143,6 +143,25 @@ CREATE TABLE public.user_identities (
     CONSTRAINT user_identities_canonical_id_check CHECK (((char_length((canonical_id)::text) >= 1) AND (char_length((canonical_id)::text) <= 255))),
     CONSTRAINT user_identities_canonical_type_check CHECK (((canonical_type)::text = 'person'::text)),
     CONSTRAINT user_identities_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('disabled'::character varying)::text])))
+);
+
+
+--
+-- Name: workspace_memberships; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.workspace_memberships (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    workspace_id uuid NOT NULL,
+    user_identity_id uuid NOT NULL,
+    role character varying(32) NOT NULL,
+    status character varying(32) DEFAULT 'active'::character varying NOT NULL,
+    revoked_at timestamp(6) without time zone,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL,
+    CONSTRAINT workspace_memberships_role_check CHECK (((role)::text = ANY ((ARRAY['owner'::character varying, 'admin'::character varying, 'member'::character varying])::text[]))),
+    CONSTRAINT workspace_memberships_state_check CHECK (((((status)::text = 'active'::text) AND (revoked_at IS NULL)) OR (((status)::text = 'revoked'::text) AND (revoked_at IS NOT NULL)))),
+    CONSTRAINT workspace_memberships_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'revoked'::character varying])::text[])))
 );
 
 
@@ -225,6 +244,14 @@ ALTER TABLE ONLY public.user_identities
 
 
 --
+-- Name: workspace_memberships workspace_memberships_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.workspace_memberships
+    ADD CONSTRAINT workspace_memberships_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: workspaces workspaces_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -237,6 +264,13 @@ ALTER TABLE ONLY public.workspaces
 --
 
 CREATE UNIQUE INDEX idx_provider_identity_bindings_subject ON public.provider_identity_bindings USING btree (provider, provider_scope, subject_id);
+
+
+--
+-- Name: idx_workspace_memberships_workspace_user; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_workspace_memberships_workspace_user ON public.workspace_memberships USING btree (workspace_id, user_identity_id);
 
 
 --
@@ -317,10 +351,32 @@ CREATE UNIQUE INDEX index_user_identities_on_canonical_type_and_canonical_id ON 
 
 
 --
+-- Name: index_workspace_memberships_on_user_identity_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_workspace_memberships_on_user_identity_id ON public.workspace_memberships USING btree (user_identity_id);
+
+
+--
+-- Name: index_workspace_memberships_on_workspace_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_workspace_memberships_on_workspace_id ON public.workspace_memberships USING btree (workspace_id);
+
+
+--
 -- Name: index_workspaces_on_identifier; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX index_workspaces_on_identifier ON public.workspaces USING btree (identifier);
+
+
+--
+-- Name: workspace_memberships fk_rails_26c4c0bd41; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.workspace_memberships
+    ADD CONSTRAINT fk_rails_26c4c0bd41 FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE RESTRICT;
 
 
 --
@@ -348,6 +404,14 @@ ALTER TABLE ONLY public.capability_grants
 
 
 --
+-- Name: workspace_memberships fk_rails_7e8947d8a0; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.workspace_memberships
+    ADD CONSTRAINT fk_rails_7e8947d8a0 FOREIGN KEY (user_identity_id) REFERENCES public.user_identities(id) ON DELETE RESTRICT;
+
+
+--
 -- Name: service_principals fk_rails_a2c5538b21; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -370,7 +434,7 @@ ALTER TABLE ONLY public.provider_identity_bindings
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260827154500'),
 ('20260827134500'),
 ('20260827112400'),
 ('20260827094700');
-
