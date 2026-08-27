@@ -10,6 +10,10 @@ module PrismHub
           class_name: "PrismHub::Adapters::ActiveRecordRecords::ServicePrincipal",
           inverse_of: :workspace,
           dependent: :restrict_with_exception
+        has_many :workspace_memberships,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::WorkspaceMembership",
+          inverse_of: :workspace,
+          dependent: :restrict_with_exception
       end
 
       class ServicePrincipal < ::ActiveRecord::Base
@@ -63,6 +67,10 @@ module PrismHub
           class_name: "PrismHub::Adapters::ActiveRecordRecords::ProviderIdentityBinding",
           inverse_of: :user_identity,
           dependent: :restrict_with_exception
+        has_many :workspace_memberships,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::WorkspaceMembership",
+          inverse_of: :user_identity,
+          dependent: :restrict_with_exception
       end
 
       class ProviderIdentityBinding < ::ActiveRecord::Base
@@ -71,6 +79,17 @@ module PrismHub
         belongs_to :user_identity,
           class_name: "PrismHub::Adapters::ActiveRecordRecords::UserIdentity",
           inverse_of: :provider_identity_bindings
+      end
+
+      class WorkspaceMembership < ::ActiveRecord::Base
+        self.table_name = "workspace_memberships"
+
+        belongs_to :workspace,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::Workspace",
+          inverse_of: :workspace_memberships
+        belongs_to :user_identity,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::UserIdentity",
+          inverse_of: :workspace_memberships
       end
     end
   end
