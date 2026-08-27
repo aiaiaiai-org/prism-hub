@@ -10,17 +10,20 @@ contract = YAML.safe_load_file(path, aliases: false)
 
 expected_operations = {
   ["/healthz", "get"] => "getHealth",
+  ["/api/v1/actors/resolve", "post"] => "resolveActor",
   ["/api/v1/channels", "get"] => "listChannels",
   ["/api/v1/publications/validate", "post"] => "validatePublication",
   ["/api/v1/publications", "post"] => "publishPublication"
 }
 protected_operations = [
+  ["/api/v1/actors/resolve", "post"],
   ["/api/v1/channels", "get"],
   ["/api/v1/publications/validate", "post"],
   ["/api/v1/publications", "post"]
 ].freeze
 
 raise "OpenAPI version drift" unless contract.fetch("openapi") == "3.1.0"
+raise "Hub API metadata version drift" unless contract.dig("info", "version") == "0.1.0-alpha.4"
 
 expected_operations.each do |(route, method), operation_id|
   actual = contract.dig("paths", route, method, "operationId")
@@ -32,6 +35,20 @@ protected_operations.each do |route, method|
   %w[401 403].each do |status|
     raise "#{method.upcase} #{route} must declare #{status}" unless responses.key?(status)
   end
+end
+
+actor_request = contract.dig("components", "schemas", "ActorResolutionRequest")
+unless actor_request.fetch("additionalProperties") == false &&
+    actor_request.fetch("required").sort == %w[provider provider_scope subject_id] &&
+    actor_request.fetch("properties").keys.sort == %w[provider provider_scope subject_id]
+  raise "actor resolution request must expose only provider subject fields"
+end
+
+actor = contract.dig("components", "schemas", "ResolvedActor")
+unless actor.fetch("additionalProperties") == false &&
+    actor.fetch("required").sort == %w[identity role] &&
+    actor.fetch("properties").keys.sort == %w[identity role]
+  raise "resolved actor must expose only canonical identity and workspace role"
 end
 
 target_properties = contract.dig(
