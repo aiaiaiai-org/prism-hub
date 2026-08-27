@@ -3,12 +3,12 @@
 openapi: 3.1.0
 info:
   title: Prism Hub API
-  version: 0.1.0-alpha.2
+  version: 0.1.0-alpha.3
   summary: Versioned client boundary for Prism control-plane operations
   description: >-
-    Clients use public Hub channel IDs. Provider channel and credential
-    references remain server-side and are expanded only before invoking
-    prism-execution.v1.
+    Clients authenticate with workspace-bound opaque Hub credentials and use
+    public Hub channel IDs. Provider channel and credential references remain
+    server-side and are expanded only before invoking prism-execution.v1.
 servers:
   - url: http://localhost:3000
 security:
@@ -32,16 +32,17 @@ paths:
   /api/v1/channels:
     get:
       operationId: listChannels
-      summary: List public configured channels
+      summary: List channels visible to the authenticated principal
       description: >-
-        Returns stable public channel IDs together with declared publishing
-        capabilities. Continue with the opaque next_cursor until it is null.
+        Requires channels:read and returns only stable public channel IDs granted
+        to the authenticated service principal. Continue with the opaque
+        next_cursor until it is null.
       parameters:
         - $ref: "#/components/parameters/PageLimit"
         - $ref: "#/components/parameters/PageCursor"
       responses:
         "200":
-          description: Configured public channel metadata
+          description: Authorised public channel metadata
           headers:
             X-Request-ID:
               $ref: "#/components/headers/RequestId"
@@ -51,12 +52,18 @@ paths:
                 $ref: "#/components/schemas/ChannelsResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "422":
           $ref: "#/components/responses/InputRejected"
   /api/v1/publications/validate:
     post:
       operationId: validatePublication
       summary: Run deterministic preflight without publishing
+      description: >-
+        Requires publications:validate and a channel grant for every explicit
+        target. If any target is outside the principal scope, the entire request
+        is rejected before Prism execution.
       parameters:
         - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
@@ -72,6 +79,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "413":
           $ref: "#/components/responses/PayloadTooLarge"
         "415":
@@ -87,8 +96,11 @@ paths:
       operationId: publishPublication
       summary: Publish one explicit multi-target request
       description: >-
-        This operation may perform irreversible external actions. Dispatch
-        behavior is controlled by the request's explicit dispatch_policy.
+        Requires publications:publish and a channel grant for every explicit
+        target. Authorization is all-or-nothing: ungranted targets are never
+        silently dropped. This operation may perform irreversible external
+        actions; dispatch behavior is controlled by the request's explicit
+        dispatch_policy.
       parameters:
         - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
@@ -141,6 +153,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "413":
           $ref: "#/components/responses/PayloadTooLarge"
         "415":
@@ -161,7 +175,11 @@ components:
     BearerAuth:
       type: http
       scheme: bearer
-      bearerFormat: opaque
+      bearerFormat: prism_client_v1 opaque credential
+      description: >-
+        Workspace-bound Hub credential. Missing, malformed, expired, or revoked
+        credentials are unauthenticated. The legacy global token is accepted only
+        when an explicit server-side migration flag enables it.
   parameters:
     PageLimit:
       name: limit
@@ -177,7 +195,7 @@ components:
       name: cursor
       in: query
       required: false
-      description: Opaque continuation cursor from the previous page
+      description: Opaque continuation cursor from the previous authorised page
       schema:
         type: string
         minLength: 1
@@ -211,7 +229,16 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
     Unauthorized:
-      description: Missing or invalid Hub bearer token
+      description: Missing, malformed, expired, revoked, or otherwise invalid Hub bearer credential
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Authenticated principal lacks the required capability or channel grant
       headers:
         X-Request-ID:
           $ref: "#/components/headers/RequestId"
