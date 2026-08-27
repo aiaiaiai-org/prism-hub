@@ -6,8 +6,14 @@ module PrismHub
       CHANNELS_READ = "channels:read".freeze
       PUBLICATIONS_VALIDATE = "publications:validate".freeze
       PUBLICATIONS_PUBLISH = "publications:publish".freeze
+      ACTORS_RESOLVE = "actors:resolve".freeze
 
-      ALL = [CHANNELS_READ, PUBLICATIONS_VALIDATE, PUBLICATIONS_PUBLISH].freeze
+      ALL = [
+        CHANNELS_READ,
+        PUBLICATIONS_VALIDATE,
+        PUBLICATIONS_PUBLISH,
+        ACTORS_RESOLVE
+      ].freeze
     end
   end
 end

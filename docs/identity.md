@@ -64,26 +64,41 @@ owner. This prevents a workspace from becoming human-ownerless through two
 independent revoke operations.
 
 `ResolveWorkspaceMembership` returns only an active membership whose
-`UserIdentity` is also active. The machine credential path separately guarantees
-that the calling `ServicePrincipal` belongs to an active workspace, so the later
-Telegram actor composition can combine the two identities without merging their
-policies.
+`UserIdentity` is also active.
 
-The intended actor chain is:
+## Workspace actor resolution
+
+`ResolveWorkspaceActor` composes machine authorization and human evidence
+without merging them. The calling `ServicePrincipal` must independently have the
+`actors:resolve` capability. Only then may Hub resolve the provider subject,
+require an active provider binding and human identity, and require an active
+membership in the same workspace as the machine principal.
+
+Successful resolution produces an immutable `WorkspaceActorContext` containing
+the machine principal, workspace, canonical human identity, workspace role, and
+provider evidence. Provider subject IDs remain opaque evidence and are not
+promoted into canonical identity.
+
+Unknown subjects, revoked bindings, disabled identities, and missing or revoked
+memberships intentionally collapse to one authorization failure. This prevents
+actor resolution from becoming an identity-enumeration oracle. Incoherent
+repository results are treated as an internal invariant failure rather than a
+normal authorization denial.
+
+The composed chain is:
 
 ```text
-Telegram numeric subject
-    -> ProviderIdentityBinding
-    -> UserIdentity
-    -> WorkspaceMembership
+client credential -> ServicePrincipal -> workspace + actors:resolve
+                                      |
+provider subject -> ProviderIdentityBinding -> UserIdentity
+                                      |
+                             WorkspaceMembership
+                                      |
+                           WorkspaceActorContext
 ```
 
-while the calling bot independently authenticates as:
-
-```text
-client credential
-    -> ServicePrincipal
-    -> workspace
-```
+Telegram is only one adapter for this generic contract. Its numeric user ID will
+enter as `ProviderSubject(provider=telegram, provider_scope=global, subject_id=...)`
+at the client/API boundary.
 
 <!-- © 2026 aiaiaiai · aiaiaiai.org -->
