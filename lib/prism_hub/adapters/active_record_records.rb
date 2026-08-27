@@ -58,6 +58,19 @@ module PrismHub
 
       class UserIdentity < ::ActiveRecord::Base
         self.table_name = "user_identities"
+
+        has_many :provider_identity_bindings,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::ProviderIdentityBinding",
+          inverse_of: :user_identity,
+          dependent: :restrict_with_exception
+      end
+
+      class ProviderIdentityBinding < ::ActiveRecord::Base
+        self.table_name = "provider_identity_bindings"
+
+        belongs_to :user_identity,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::UserIdentity",
+          inverse_of: :provider_identity_bindings
       end
     end
   end
