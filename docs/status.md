@@ -5,9 +5,10 @@
 - Clean Architecture object boundaries and explicit composition root;
 - server-side channel configuration with public/private field separation;
 - workspace-bound service-principal persistence;
-- opaque client-credential issue, expiry, revocation, and atomic rotation;
+- explicit service-principal provisioning with principal-owned capability/channel grants;
+- credential issue that requires a pre-provisioned principal and cannot mutate grants;
+- opaque client-credential expiry, revocation, and atomic rotation;
 - SHA-256 digest-only credential storage; raw credentials are not persisted;
-- normalized capability and channel grants;
 - immutable `AuthorisationContext` returned by the credential repository;
 - PostgreSQL migration with foreign keys, uniqueness constraints, status checks, and digest-format validation;
 - CI PostgreSQL service plus migration rollback/reapply verification;
@@ -22,6 +23,7 @@
 
 - scoped client credentials wired into HTTP authentication and authorization;
 - capability/channel-grant enforcement on HTTP routes;
+- an operation for changing grants on an existing service principal;
 - human accounts, users, memberships, or interactive role management;
 - a public/admin HTTP surface for service-principal or credential provisioning;
 - OAuth authorization, refresh, revocation, or encrypted provider-token storage;

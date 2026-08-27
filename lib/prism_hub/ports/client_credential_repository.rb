@@ -7,7 +7,7 @@ module PrismHub
         raise NotImplementedError
       end
 
-      def issue(workspace_id:, principal_id:, bot_instance_id:, capabilities:, channel_ids:, token:, expires_at:)
+      def issue(workspace_id:, principal_id:, token:, expires_at:)
         raise NotImplementedError
       end
 

@@ -11,7 +11,9 @@ class ActiveRecordClientCredentialRepositoryTest < Minitest::Test
 
   def setup
     clear_identity_tables
+    @principals = PrismHub::Adapters::ActiveRecordServicePrincipalRepository.new
     @repository = PrismHub::Adapters::ActiveRecordClientCredentialRepository.new
+    provision_principal
   end
 
   def teardown
@@ -19,15 +21,7 @@ class ActiveRecordClientCredentialRepositoryTest < Minitest::Test
   end
 
   def test_issue_persists_only_a_digest_and_authenticates_scoped_context
-    credential_id = @repository.issue(
-      workspace_id: "personal",
-      principal_id: "telegram-personal",
-      bot_instance_id: "prisma-telegram",
-      capabilities: ["channels:read", "publications:publish"],
-      channel_ids: ["personal-threads"],
-      token: TOKEN,
-      expires_at: NOW + 3600
-    )
+    credential_id = issue(TOKEN, expires_at: NOW + 3600)
 
     credential = PrismHub::Adapters::ActiveRecordRecords::ClientCredential.find(credential_id)
     refute_equal TOKEN, credential.token_digest
@@ -40,16 +34,19 @@ class ActiveRecordClientCredentialRepositoryTest < Minitest::Test
     assert_equal ["personal-threads"], context.allowed_channel_ids
   end
 
+  def test_issuing_another_credential_never_changes_principal_grants
+    issue(TOKEN)
+    issue(ROTATED_TOKEN)
+
+    context = @repository.authenticate(token: ROTATED_TOKEN, now: NOW)
+    assert_equal ["channels:read", "publications:publish"], context.capabilities
+    assert_equal ["personal-threads"], context.allowed_channel_ids
+    assert_equal 1, PrismHub::Adapters::ActiveRecordRecords::CapabilityGrant.where(capability: "channels:read").count
+    assert_equal 1, PrismHub::Adapters::ActiveRecordRecords::ChannelGrant.where(channel_id: "personal-threads").count
+  end
+
   def test_expired_or_revoked_credentials_do_not_authenticate
-    credential_id = @repository.issue(
-      workspace_id: "personal",
-      principal_id: "telegram-personal",
-      bot_instance_id: "prisma-telegram",
-      capabilities: ["channels:read"],
-      channel_ids: ["personal-threads"],
-      token: TOKEN,
-      expires_at: NOW - 1
-    )
+    credential_id = issue(TOKEN, expires_at: NOW - 1)
 
     assert_nil @repository.authenticate(token: TOKEN, now: NOW)
 
@@ -59,15 +56,7 @@ class ActiveRecordClientCredentialRepositoryTest < Minitest::Test
   end
 
   def test_rotation_revokes_old_secret_and_activates_replacement_atomically
-    credential_id = @repository.issue(
-      workspace_id: "personal",
-      principal_id: "telegram-personal",
-      bot_instance_id: "prisma-telegram",
-      capabilities: ["publications:publish"],
-      channel_ids: ["personal-threads"],
-      token: TOKEN,
-      expires_at: nil
-    )
+    credential_id = issue(TOKEN)
 
     replacement_id = @repository.rotate(
       credential_id: credential_id,
@@ -83,33 +72,39 @@ class ActiveRecordClientCredentialRepositoryTest < Minitest::Test
     refute_equal credential_id, replacement_id
   end
 
-  def test_existing_principal_cannot_be_rebound_to_another_bot_instance
-    @repository.issue(
-      workspace_id: "personal",
-      principal_id: "telegram-personal",
-      bot_instance_id: "prisma-telegram",
-      capabilities: ["channels:read"],
-      channel_ids: ["personal-threads"],
-      token: TOKEN,
-      expires_at: nil
-    )
-
-    error = assert_raises(PrismHub::CredentialConflictError) do
+  def test_issue_requires_an_explicitly_provisioned_service_principal
+    error = assert_raises(PrismHub::ServicePrincipalNotFoundError) do
       @repository.issue(
-        workspace_id: "personal",
-        principal_id: "telegram-personal",
-        bot_instance_id: "another-bot",
-        capabilities: ["channels:read"],
-        channel_ids: ["personal-threads"],
+        workspace_id: "other",
+        principal_id: "missing",
         token: ROTATED_TOKEN,
         expires_at: nil
       )
     end
 
-    assert_equal "hub.service_principal.bot_instance_mismatch", error.code
+    assert_equal "hub.service_principal.not_found", error.code
   end
 
   private
+
+  def provision_principal
+    @principals.provision(
+      workspace_id: "personal",
+      principal_id: "telegram-personal",
+      bot_instance_id: "prisma-telegram",
+      capabilities: ["publications:publish", "channels:read"],
+      channel_ids: ["personal-threads"]
+    )
+  end
+
+  def issue(token, expires_at: nil)
+    @repository.issue(
+      workspace_id: "personal",
+      principal_id: "telegram-personal",
+      token: token,
+      expires_at: expires_at
+    )
+  end
 
   def clear_identity_tables
     connection = ActiveRecord::Base.connection
