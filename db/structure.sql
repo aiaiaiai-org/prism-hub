@@ -83,6 +83,28 @@ CREATE TABLE public.client_credentials (
 
 
 --
+-- Name: provider_identity_bindings; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.provider_identity_bindings (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_identity_id uuid NOT NULL,
+    provider character varying(64) NOT NULL,
+    provider_scope character varying(128) NOT NULL,
+    subject_id character varying(512) NOT NULL,
+    status character varying(32) DEFAULT 'active'::character varying NOT NULL,
+    revoked_at timestamp(6) without time zone,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL,
+    CONSTRAINT provider_identity_bindings_provider_check CHECK (((provider)::text ~ '^[a-z][a-z0-9._-]{0,63}$'::text)),
+    CONSTRAINT provider_identity_bindings_scope_check CHECK (((provider_scope)::text ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'::text)),
+    CONSTRAINT provider_identity_bindings_state_check CHECK (((((status)::text = 'active'::text) AND (revoked_at IS NULL)) OR (((status)::text = 'revoked'::text) AND (revoked_at IS NOT NULL)))),
+    CONSTRAINT provider_identity_bindings_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'revoked'::character varying])::text[]))),
+    CONSTRAINT provider_identity_bindings_subject_check CHECK ((char_length((subject_id)::text) > 0))
+);
+
+
+--
 -- Name: schema_migrations; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -120,7 +142,7 @@ CREATE TABLE public.user_identities (
     updated_at timestamp(6) without time zone NOT NULL,
     CONSTRAINT user_identities_canonical_id_check CHECK (((char_length((canonical_id)::text) >= 1) AND (char_length((canonical_id)::text) <= 255))),
     CONSTRAINT user_identities_canonical_type_check CHECK (((canonical_type)::text = 'person'::text)),
-    CONSTRAINT user_identities_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'disabled'::character varying])::text[])))
+    CONSTRAINT user_identities_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('disabled'::character varying)::text])))
 );
 
 
@@ -171,6 +193,14 @@ ALTER TABLE ONLY public.client_credentials
 
 
 --
+-- Name: provider_identity_bindings provider_identity_bindings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.provider_identity_bindings
+    ADD CONSTRAINT provider_identity_bindings_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: schema_migrations schema_migrations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -200,6 +230,13 @@ ALTER TABLE ONLY public.user_identities
 
 ALTER TABLE ONLY public.workspaces
     ADD CONSTRAINT workspaces_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: idx_provider_identity_bindings_subject; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_provider_identity_bindings_subject ON public.provider_identity_bindings USING btree (provider, provider_scope, subject_id);
 
 
 --
@@ -242,6 +279,13 @@ CREATE INDEX index_client_credentials_on_service_principal_id ON public.client_c
 --
 
 CREATE UNIQUE INDEX index_client_credentials_on_token_digest ON public.client_credentials USING btree (token_digest);
+
+
+--
+-- Name: index_provider_identity_bindings_on_user_identity_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_provider_identity_bindings_on_user_identity_id ON public.provider_identity_bindings USING btree (user_identity_id);
 
 
 --
@@ -312,12 +356,21 @@ ALTER TABLE ONLY public.service_principals
 
 
 --
+-- Name: provider_identity_bindings fk_rails_bbe051879c; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.provider_identity_bindings
+    ADD CONSTRAINT fk_rails_bbe051879c FOREIGN KEY (user_identity_id) REFERENCES public.user_identities(id) ON DELETE RESTRICT;
+
+
+--
 -- PostgreSQL database dump complete
 --
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260827134500'),
 ('20260827112400'),
 ('20260827094700');
 

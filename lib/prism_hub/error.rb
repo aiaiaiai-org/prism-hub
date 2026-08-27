@@ -21,5 +21,7 @@ module PrismHub
   class ServicePrincipalNotFoundError < Error; end
   class UserIdentityConflictError < Error; end
   class UserIdentityNotFoundError < Error; end
+  class ProviderIdentityBindingConflictError < Error; end
+  class ProviderIdentityBindingNotFoundError < Error; end
   class AuthorisationError < Error; end
 end
