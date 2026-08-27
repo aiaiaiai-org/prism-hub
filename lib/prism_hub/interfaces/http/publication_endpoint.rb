@@ -18,13 +18,14 @@ module PrismHub
           @request_body = request_body
         end
 
-        def call(request)
+        def call(request, authorisation_context:)
           idempotency_key = request.get_header("HTTP_IDEMPOTENCY_KEY")
           draft = Domain::PublicationDraft.from_hash(@request_body.parse(request))
           response = @execute_publication.call(
             draft: draft,
             idempotency_key: idempotency_key,
-            request_id: request.get_header(App::REQUEST_ID_KEY)
+            request_id: request.get_header(App::REQUEST_ID_KEY),
+            authorisation_context: authorisation_context
           )
           JsonResponse.call(status_for(response), response)
         end

@@ -14,12 +14,24 @@ expected_operations = {
   ["/api/v1/publications/validate", "post"] => "validatePublication",
   ["/api/v1/publications", "post"] => "publishPublication"
 }
+protected_operations = [
+  ["/api/v1/channels", "get"],
+  ["/api/v1/publications/validate", "post"],
+  ["/api/v1/publications", "post"]
+].freeze
 
 raise "OpenAPI version drift" unless contract.fetch("openapi") == "3.1.0"
 
 expected_operations.each do |(route, method), operation_id|
   actual = contract.dig("paths", route, method, "operationId")
   raise "missing #{method.upcase} #{route} operation" unless actual == operation_id
+end
+
+protected_operations.each do |route, method|
+  responses = contract.dig("paths", route, method, "responses")
+  %w[401 403].each do |status|
+    raise "#{method.upcase} #{route} must declare #{status}" unless responses.key?(status)
+  end
 end
 
 target_properties = contract.dig(

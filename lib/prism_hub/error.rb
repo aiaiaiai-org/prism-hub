@@ -19,4 +19,5 @@ module PrismHub
   class CredentialNotFoundError < Error; end
   class ServicePrincipalConflictError < Error; end
   class ServicePrincipalNotFoundError < Error; end
+  class AuthorisationError < Error; end
 end

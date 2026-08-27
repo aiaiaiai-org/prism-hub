@@ -12,9 +12,10 @@ module PrismHub
           @cursor = cursor
         end
 
-        def call(request)
+        def call(request, authorisation_context:)
           limit = limit(request.params["limit"])
           result = @list_channels.call(
+            authorisation_context: authorisation_context,
             limit: limit,
             after_id: @cursor.decode(request.params["cursor"])
           )

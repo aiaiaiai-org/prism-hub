@@ -3,7 +3,7 @@
 module PrismHub
   class Bootstrap
     class << self
-      def build(env:, logger: Logger.new($stdout))
+      def build(env:, logger: Logger.new($stdout), clock: -> { Time.now.utc })
         channels = Adapters::EnvironmentChannelRepository.new(
           env.fetch("PRISM_HUB_CHANNELS_JSON", "[]")
         )
@@ -24,11 +24,15 @@ module PrismHub
           channels: channels,
           gateway: gateway
         )
+        credential_repository = Adapters::ActiveRecordClientCredentialRepository.new
+        authenticator = Interfaces::Http::Authenticator.new(
+          credential_repository: credential_repository,
+          clock: clock,
+          **legacy_authentication(env, channels)
+        )
 
         Interfaces::Http::App.new(
-          authenticator: Interfaces::Http::Authenticator.new(
-            token: env.fetch("PRISM_HUB_API_TOKEN")
-          ),
+          authenticator: authenticator,
           health_endpoint: Interfaces::Http::HealthEndpoint.new,
           routes: {
             ["GET", "/api/v1/channels"] => Interfaces::Http::ChannelsEndpoint.new(
@@ -55,6 +59,24 @@ module PrismHub
       end
 
       private
+
+      def legacy_authentication(env, channels)
+        enabled = boolean(
+          env.fetch("PRISM_HUB_LEGACY_TOKEN_ENABLED", "false"),
+          "legacy token flag"
+        )
+        return {} unless enabled
+
+        {
+          legacy_token: env.fetch("PRISM_HUB_API_TOKEN"),
+          legacy_context: Domain::AuthorisationContext.new(
+            principal_id: "legacy-global",
+            workspace_id: "legacy-global",
+            capabilities: Domain::Capabilities::ALL,
+            allowed_channel_ids: channels.all_ids
+          )
+        }
+      end
 
       def build_gateway(env, logger)
         runner = Adapters::ProcessRunner.new(
@@ -90,6 +112,16 @@ module PrismHub
         raise ConfigurationError.new(
           "hub.prism.command.invalid_json",
           "PRISM_RUNTIME_COMMAND_JSON must contain valid JSON"
+        )
+      end
+
+      def boolean(source, label)
+        return true if source == "true"
+        return false if source == "false"
+
+        raise ConfigurationError.new(
+          "hub.configuration.invalid_boolean",
+          "#{label} must be true or false"
         )
       end
 
