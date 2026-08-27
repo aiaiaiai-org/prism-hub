@@ -11,6 +11,9 @@
 - provider-independent global `UserIdentity` projection for canonical human identity;
 - scope-aware provider subjects and durable provider-to-human identity bindings;
 - provider binding revocation that preserves historical ownership and forbids implicit reassignment;
+- durable workspace memberships separated from global human identity;
+- explicit `owner`, `admin`, and `member` membership roles without implicit capability mapping;
+- membership revocation with stable history, no implicit reactivation, and last-owner protection;
 - immutable `AuthorisationContext` returned by scoped credential authentication;
 - scoped HTTP bearer authentication with explicit `401` for invalid credentials;
 - explicit `403` capability and channel-grant enforcement in application use cases;
@@ -28,9 +31,9 @@
 
 ## Explicitly not implemented
 
-- workspace memberships for human identities;
-- Telegram actor resolution through provider identity bindings;
+- Telegram actor resolution through provider identity bindings and workspace memberships;
 - explicit audited provider-identity ownership transfer;
+- explicit workspace membership role-change or reactivation operations;
 - persistent bot lifecycle state (`active`, `paused`, `disabled`);
 - social accounts and per-account human access roles;
 - a public/admin HTTP surface for identity, service-principal, or credential provisioning;
@@ -44,11 +47,10 @@
 
 ## Next executable increments
 
-1. Add workspace memberships for `UserIdentity` without merging human identity into workspace policy.
-2. Resolve Telegram numeric user IDs through provider bindings and combine human actor evidence with the bot's machine `ServicePrincipal` identity.
-3. Add persistent Hub-owned bot lifecycle state (`active`, `paused`, `disabled`).
-4. Expose the focused lifecycle operations needed for `/stop`, `/resume`, `/status`, and `/cancel`.
-5. Add Meta OAuth with encrypted provider credential storage after the actor and lifecycle boundaries are stable.
-6. Wire production packaging and infrastructure before activating live OAuth callbacks.
+1. Resolve Telegram numeric user IDs through provider bindings and active workspace membership, then combine that human actor evidence with the bot's machine `ServicePrincipal` identity.
+2. Add persistent Hub-owned bot lifecycle state (`active`, `paused`, `disabled`).
+3. Expose the focused lifecycle operations needed for `/stop`, `/resume`, `/status`, and `/cancel`.
+4. Add Meta OAuth with encrypted provider credential storage after the actor and lifecycle boundaries are stable.
+5. Wire production packaging and infrastructure before activating live OAuth callbacks.
 
 <!-- © 2026 aiaiaiai · aiaiaiai.org -->
