@@ -3,7 +3,11 @@
 module PrismHub
   module Ports
     class ChannelRepository
-      def page(limit:, after_id: nil)
+      def page(limit:, allowed_ids:, after_id: nil)
+        raise NotImplementedError
+      end
+
+      def all_ids
         raise NotImplementedError
       end
 

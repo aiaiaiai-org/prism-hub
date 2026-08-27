@@ -20,8 +20,9 @@ module PrismHub
         @channels.freeze
       end
 
-      def page(limit:, after_id: nil)
-        ordered = @channels.values.sort_by(&:id)
+      def page(limit:, allowed_ids:, after_id: nil)
+        allowed = Array(allowed_ids).to_h { |id| [id, true] }
+        ordered = @channels.values.select { |channel| allowed.key?(channel.id) }.sort_by(&:id)
         start = page_start(ordered, after_id)
         values = ordered.slice(start, limit) || []
         has_more = (start + values.length) < ordered.length
@@ -29,6 +30,10 @@ module PrismHub
           channels: values,
           next_after_id: has_more ? values.last.id : nil
         )
+      end
+
+      def all_ids
+        @channels.keys.sort.freeze
       end
 
       def find(id)
@@ -45,7 +50,7 @@ module PrismHub
 
         raise InputError.new(
           "hub.channels.cursor.invalid",
-          "cursor does not identify a configured channel"
+          "cursor does not identify an authorised configured channel"
         )
       end
 

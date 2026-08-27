@@ -30,16 +30,26 @@ module PrismHub
 
         def dispatch(request, request_id)
           return @health_endpoint.call(request) if health_request?(request)
-          return unauthorized(request_id) unless @authenticator.authorized?(request)
+
+          authorisation_context = @authenticator.authenticate(request)
+          return unauthorized(request_id) unless authorisation_context
 
           endpoint = @routes[[request.request_method, request.path_info]]
-          return endpoint.call(request) if endpoint
+          return endpoint.call(request, authorisation_context: authorisation_context) if endpoint
           return method_not_allowed(request_id) if API_PATHS.include?(request.path_info)
 
           JsonResponse.error(
             404,
             "hub.http.not_found",
             "endpoint not found",
+            request_id: request_id
+          )
+        rescue AuthorisationError => error
+          JsonResponse.error(
+            403,
+            error.code,
+            error.message,
+            details: error.details,
             request_id: request_id
           )
         rescue InputError, UnknownChannelError => error
@@ -70,7 +80,7 @@ module PrismHub
           JsonResponse.error(
             401,
             "hub.authorization.required",
-            "a valid Hub bearer token is required",
+            "a valid Hub bearer credential is required",
             request_id: request_id
           )
         end
