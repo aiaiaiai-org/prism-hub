@@ -22,9 +22,25 @@ jobs:
     env:
       RAILS_ENV: test
       SECRET_KEY_BASE: test-secret-key-base-that-is-not-used-outside-ci
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/prism_hub_test
       PRISM_HUB_API_TOKEN: test-hub-token-that-is-longer-than-32-characters
       PRISM_HUB_CHANNELS_JSON: "[]"
       PRISM_RUNTIME_COMMAND_JSON: '["prism-runtime","--json"]'
+
+    services:
+      postgres:
+        image: postgres:18.6-alpine
+        env:
+          POSTGRES_DB: prism_hub_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d prism_hub_test"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
 
     steps:
       - name: Check out source
@@ -40,6 +56,29 @@ jobs:
       - name: Install dependencies
         run: bundle install --jobs 4 --retry 3
 
+      - name: Install matching PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl ca-certificates
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl --fail --show-error --silent \
+            --output /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          . /etc/os-release
+          architecture="$(dpkg --print-architecture)"
+          printf '%s\n' \
+            'Types: deb' \
+            'URIs: https://apt.postgresql.org/pub/repos/apt' \
+            "Suites: ${VERSION_CODENAME}-pgdg" \
+            "Architectures: ${architecture}" \
+            'Components: main' \
+            'Signed-By: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc' \
+            | sudo tee /etc/apt/sources.list.d/pgdg.sources >/dev/null
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-18
+          echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
+          /usr/lib/postgresql/18/bin/pg_dump --version
+
       - name: Check Ruby syntax
         run: git ls-files -z '*.rb' 'bin/*' 'script/*' | xargs -0 -n1 ruby -c
 
@@ -48,6 +87,23 @@ jobs:
 
       - name: Run security analysis
         run: bundle exec brakeman --force --no-pager --quiet -w2
+
+      - name: Prepare and prove database migrations reversible
+        run: |
+          bundle exec rails db:prepare
+          bundle exec rails db:rollback STEP=1
+          bundle exec rails db:migrate
+
+      - name: Upload resolved database structure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prism-hub-structure-${{ github.sha }}
+          path: db/structure.sql
+          if-no-files-found: warn
+
+      - name: Require a committed deterministic database structure
+        run: test -z "$(git status --porcelain -- db/structure.sql)"
 
       - name: Run tests
         run: bundle exec rails test
