@@ -134,7 +134,7 @@ state.
 onboarding. It derives the personal workspace reference from the existing
 canonical identity, requires its active `owner` membership, and returns the same
 actor projection without creating or reactivating any row. Unknown, revoked,
-disabled, missing, and incoherent states use the same non-enumerating actor
-denial as workspace-scoped resolution.
+disabled, missing, and incoherent personal-workspace states collapse to the same
+non-enumerating `hub.actor.not_authorized` denial.
 
 <!-- © 2026 aiaiaiai · aiaiaiai.org -->
