@@ -96,23 +96,23 @@ module PrismHub
           end
 
           reject_disabled!(record)
-          return to_domain(record) if record.status == target_status
-
-          from_status = record.status
-          attributes = if target_status == STATUS_PAUSED
-            {status: STATUS_PAUSED, paused_at: timestamp, disabled_at: nil}
-          else
-            {status: STATUS_ACTIVE, paused_at: nil, disabled_at: nil}
+          unless record.status == target_status
+            from_status = record.status
+            attributes = if target_status == STATUS_PAUSED
+              {status: STATUS_PAUSED, paused_at: timestamp, disabled_at: nil}
+            else
+              {status: STATUS_ACTIVE, paused_at: nil, disabled_at: nil}
+            end
+            record.update!(attributes)
+            append_event!(
+              record,
+              actor: actor,
+              action: action,
+              from_status: from_status,
+              to_status: target_status,
+              occurred_at: timestamp
+            )
           end
-          record.update!(attributes)
-          append_event!(
-            record,
-            actor: actor,
-            action: action,
-            from_status: from_status,
-            to_status: target_status,
-            occurred_at: timestamp
-          )
           to_domain(record)
         end
       end
