@@ -159,9 +159,9 @@ CREATE TABLE public.workspace_memberships (
     revoked_at timestamp(6) without time zone,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
-    CONSTRAINT workspace_memberships_role_check CHECK (((role)::text = ANY ((ARRAY['owner'::character varying, 'admin'::character varying, 'member'::character varying])::text[]))),
+    CONSTRAINT workspace_memberships_role_check CHECK (((role)::text = ANY (ARRAY[('owner'::character varying)::text, ('admin'::character varying)::text, ('member'::character varying)::text]))),
     CONSTRAINT workspace_memberships_state_check CHECK (((((status)::text = 'active'::text) AND (revoked_at IS NULL)) OR (((status)::text = 'revoked'::text) AND (revoked_at IS NOT NULL)))),
-    CONSTRAINT workspace_memberships_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'revoked'::character varying])::text[])))
+    CONSTRAINT workspace_memberships_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('revoked'::character varying)::text])))
 );
 
 
@@ -432,3 +432,4 @@ INSERT INTO "schema_migrations" (version) VALUES
 ('20260827134500'),
 ('20260827112400'),
 ('20260827094700');
+
