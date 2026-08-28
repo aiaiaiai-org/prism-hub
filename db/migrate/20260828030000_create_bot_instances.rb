@@ -59,5 +59,12 @@ class CreateBotInstances < ActiveRecord::Migration[8.1]
     add_check_constraint :bot_instance_lifecycle_events,
       "to_status IN ('active', 'paused', 'disabled')",
       name: "bot_instance_events_to_status_check"
+    add_check_constraint :bot_instance_lifecycle_events,
+      <<~SQL.squish,
+        (action = 'created' AND from_status IS NULL AND to_status = 'active') OR
+        (action = 'paused' AND from_status = 'active' AND to_status = 'paused') OR
+        (action = 'resumed' AND from_status = 'paused' AND to_status = 'active')
+      SQL
+      name: "bot_instance_events_transition_check"
   end
 end
