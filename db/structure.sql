@@ -41,6 +41,43 @@ CREATE TABLE public.ar_internal_metadata (
 
 
 --
+-- Name: bot_instance_lifecycle_events; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.bot_instance_lifecycle_events (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    bot_instance_id uuid NOT NULL,
+    actor_user_identity_id uuid NOT NULL,
+    action character varying(32) NOT NULL,
+    from_status character varying(32),
+    to_status character varying(32) NOT NULL,
+    occurred_at timestamp(6) without time zone NOT NULL,
+    CONSTRAINT bot_instance_events_action_check CHECK (((action)::text = ANY ((ARRAY['created'::character varying, 'paused'::character varying, 'resumed'::character varying])::text[]))),
+    CONSTRAINT bot_instance_events_from_status_check CHECK (((from_status IS NULL) OR ((from_status)::text = ANY ((ARRAY['active'::character varying, 'paused'::character varying, 'disabled'::character varying])::text[])))),
+    CONSTRAINT bot_instance_events_to_status_check CHECK (((to_status)::text = ANY ((ARRAY['active'::character varying, 'paused'::character varying, 'disabled'::character varying])::text[]))),
+    CONSTRAINT bot_instance_events_transition_check CHECK (((((action)::text = 'created'::text) AND (from_status IS NULL) AND ((to_status)::text = 'active'::text)) OR (((action)::text = 'paused'::text) AND ((from_status)::text = 'active'::text) AND ((to_status)::text = 'paused'::text)) OR (((action)::text = 'resumed'::text) AND ((from_status)::text = 'paused'::text) AND ((to_status)::text = 'active'::text))))
+);
+
+
+--
+-- Name: bot_instances; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.bot_instances (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    service_principal_id uuid NOT NULL,
+    workspace_id uuid NOT NULL,
+    status character varying(32) DEFAULT 'active'::character varying NOT NULL,
+    paused_at timestamp(6) without time zone,
+    disabled_at timestamp(6) without time zone,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL,
+    CONSTRAINT bot_instances_state_check CHECK (((((status)::text = 'active'::text) AND (paused_at IS NULL) AND (disabled_at IS NULL)) OR (((status)::text = 'paused'::text) AND (paused_at IS NOT NULL) AND (disabled_at IS NULL)) OR (((status)::text = 'disabled'::text) AND (paused_at IS NULL) AND (disabled_at IS NOT NULL)))),
+    CONSTRAINT bot_instances_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'paused'::character varying, 'disabled'::character varying])::text[])))
+);
+
+
+--
 -- Name: capability_grants; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -188,6 +225,22 @@ ALTER TABLE ONLY public.ar_internal_metadata
 
 
 --
+-- Name: bot_instance_lifecycle_events bot_instance_lifecycle_events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.bot_instance_lifecycle_events
+    ADD CONSTRAINT bot_instance_lifecycle_events_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: bot_instances bot_instances_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.bot_instances
+    ADD CONSTRAINT bot_instances_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: capability_grants capability_grants_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -260,6 +313,20 @@ ALTER TABLE ONLY public.workspaces
 
 
 --
+-- Name: idx_bot_instance_events_instance_time; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_bot_instance_events_instance_time ON public.bot_instance_lifecycle_events USING btree (bot_instance_id, occurred_at);
+
+
+--
+-- Name: idx_bot_instances_principal_workspace; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_bot_instances_principal_workspace ON public.bot_instances USING btree (service_principal_id, workspace_id);
+
+
+--
 -- Name: idx_provider_identity_bindings_subject; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -271,6 +338,34 @@ CREATE UNIQUE INDEX idx_provider_identity_bindings_subject ON public.provider_id
 --
 
 CREATE UNIQUE INDEX idx_workspace_memberships_workspace_user ON public.workspace_memberships USING btree (workspace_id, user_identity_id);
+
+
+--
+-- Name: index_bot_instance_lifecycle_events_on_actor_user_identity_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_bot_instance_lifecycle_events_on_actor_user_identity_id ON public.bot_instance_lifecycle_events USING btree (actor_user_identity_id);
+
+
+--
+-- Name: index_bot_instance_lifecycle_events_on_bot_instance_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_bot_instance_lifecycle_events_on_bot_instance_id ON public.bot_instance_lifecycle_events USING btree (bot_instance_id);
+
+
+--
+-- Name: index_bot_instances_on_service_principal_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_bot_instances_on_service_principal_id ON public.bot_instances USING btree (service_principal_id);
+
+
+--
+-- Name: index_bot_instances_on_workspace_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_bot_instances_on_workspace_id ON public.bot_instances USING btree (workspace_id);
 
 
 --
@@ -405,11 +500,35 @@ ALTER TABLE ONLY public.workspace_memberships
 
 
 --
+-- Name: bot_instance_lifecycle_events fk_rails_87e739aa9f; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.bot_instance_lifecycle_events
+    ADD CONSTRAINT fk_rails_87e739aa9f FOREIGN KEY (bot_instance_id) REFERENCES public.bot_instances(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: bot_instances fk_rails_90812beda1; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.bot_instances
+    ADD CONSTRAINT fk_rails_90812beda1 FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE RESTRICT;
+
+
+--
 -- Name: service_principals fk_rails_a2c5538b21; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.service_principals
     ADD CONSTRAINT fk_rails_a2c5538b21 FOREIGN KEY (legacy_workspace_id) REFERENCES public.workspaces(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: bot_instances fk_rails_abf0df04c6; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.bot_instances
+    ADD CONSTRAINT fk_rails_abf0df04c6 FOREIGN KEY (service_principal_id) REFERENCES public.service_principals(id) ON DELETE RESTRICT;
 
 
 --
@@ -421,12 +540,21 @@ ALTER TABLE ONLY public.provider_identity_bindings
 
 
 --
+-- Name: bot_instance_lifecycle_events fk_rails_c33fbc83d8; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.bot_instance_lifecycle_events
+    ADD CONSTRAINT fk_rails_c33fbc83d8 FOREIGN KEY (actor_user_identity_id) REFERENCES public.user_identities(id) ON DELETE RESTRICT;
+
+
+--
 -- PostgreSQL database dump complete
 --
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260828030000'),
 ('20260828010000'),
 ('20260828000000'),
 ('20260827154500'),
