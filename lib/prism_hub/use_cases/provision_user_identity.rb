@@ -15,6 +15,7 @@ module PrismHub
             "user identities must reference a canonical person identity"
           )
         end
+        Domain::PublicUserId.new(identity.id)
 
         @user_identity_repository.provision(canonical_identity: identity)
       end

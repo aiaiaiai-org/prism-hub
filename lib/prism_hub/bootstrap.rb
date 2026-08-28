@@ -18,6 +18,10 @@ module PrismHub
           binding_repository: Adapters::ActiveRecordProviderIdentityBindingRepository.new,
           workspace_membership_repository: Adapters::ActiveRecordWorkspaceMembershipRepository.new
         )
+        onboard_actor = UseCases::OnboardProviderIdentity.new(
+          onboarding_repository: Adapters::ActiveRecordIdentityOnboardingRepository.new,
+          public_user_id_generator: Adapters::SecurePublicUserIdGenerator.new
+        )
         validate = execution_use_case(
           "validate",
           channels: channels,
@@ -39,6 +43,10 @@ module PrismHub
           authenticator: authenticator,
           health_endpoint: Interfaces::Http::HealthEndpoint.new,
           routes: {
+            ["POST", "/api/v1/actors/onboard"] => Interfaces::Http::ActorOnboardingEndpoint.new(
+              onboard_provider_identity: onboard_actor,
+              request_body: request_body
+            ),
             ["POST", "/api/v1/actors/resolve"] => Interfaces::Http::ActorResolutionEndpoint.new(
               resolve_workspace_actor: resolve_actor,
               request_body: request_body

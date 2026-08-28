@@ -12,6 +12,13 @@ does not fetch Mind or depend on a Mind repository at runtime. A Hub
 `UserIdentity` is specifically a human runtime projection, so its canonical type
 is constrained to `person` in both the domain and PostgreSQL.
 
+Its public `id` follows the canonical `pub_dress` grammar owned by
+[`nilx-one/0x1`](https://github.com/nilx-one/0x1/blob/master/documents/04-identity.md):
+the literal `0x` prefix plus a 2–32-character slug. Hub validates the complete
+allowlist but its automatic allocator deliberately emits a 20-character
+lowercase-letter/digit subset with cryptographic randomness. Public IDs never
+derive from provider subject IDs or internal database UUIDs.
+
 ## Provider subjects and bindings
 
 External systems enter through an explicit `ProviderSubject` value:
@@ -102,5 +109,25 @@ Telegram is only one adapter for this generic contract. Its numeric user ID
 enters as
 `ProviderSubject(provider=telegram, provider_scope=global, subject_id=...)` at
 the client/API boundary.
+
+## Provider-backed onboarding
+
+`OnboardProviderIdentity` requires the separate `actors:onboard` machine
+capability. One repository transaction resolves or creates the provider
+binding, canonical `UserIdentity`, deterministic personal workspace identifier,
+and active `owner` membership. The provider-subject unique constraint arbitrates
+concurrent first requests; a losing request resolves the committed winner rather
+than creating a second identity.
+
+The endpoint returns `200` with the same canonical identity, workspace, and role
+shape whether state already existed or was created. It never returns a
+`created` flag. Revoked bindings, disabled identities, revoked memberships, and
+incoherent personal-workspace state collapse to `hub.actor.not_authorized`, so
+onboarding cannot be used as an identity-state enumeration oracle.
+
+Generated public-ID collisions roll back the complete attempted onboarding and
+retry with a fresh candidate. After the bounded retry budget is exhausted, Hub
+fails without publishing partial identity, binding, workspace, or membership
+state.
 
 <!-- © 2026 aiaiaiai · aiaiaiai.org -->

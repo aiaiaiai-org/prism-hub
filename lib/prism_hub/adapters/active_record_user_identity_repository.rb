@@ -38,7 +38,10 @@ module PrismHub
       private
 
       def validate_canonical_identity!(identity)
-        return if identity.is_a?(Domain::CanonicalIdentityRef) && identity.type == "person"
+        if identity.is_a?(Domain::CanonicalIdentityRef) && identity.type == "person"
+          Domain::PublicUserId.new(identity.id)
+          return
+        end
 
         raise ArgumentError, "user identities require a canonical person identity"
       end

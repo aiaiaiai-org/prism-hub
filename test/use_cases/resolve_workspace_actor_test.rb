@@ -107,7 +107,7 @@ class ResolveWorkspaceActorTest < Minitest::Test
   def test_detects_incoherent_repository_results_as_an_internal_invariant_failure
     other_identity = PrismHub::Domain::UserIdentity.new(
       id: "identity-2",
-      canonical_identity: PrismHub::Domain::CanonicalIdentityRef.new(type: "person", id: "someone-else"),
+      canonical_identity: PrismHub::Domain::CanonicalIdentityRef.new(type: "person", id: "0xsomeone-else"),
       status: "active"
     )
     @membership_repository.value = PrismHub::Domain::WorkspaceMembership.new(

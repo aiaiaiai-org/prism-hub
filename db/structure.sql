@@ -140,7 +140,7 @@ CREATE TABLE public.user_identities (
     status character varying(32) DEFAULT 'active'::character varying NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
-    CONSTRAINT user_identities_canonical_id_check CHECK (((char_length((canonical_id)::text) >= 1) AND (char_length((canonical_id)::text) <= 255))),
+    CONSTRAINT user_identities_canonical_id_check CHECK ((((canonical_type)::text <> 'person'::text) OR (("left"((canonical_id)::text, 2) = '0x'::text) AND ((char_length(SUBSTRING(canonical_id FROM 3)) >= 2) AND (char_length(SUBSTRING(canonical_id FROM 3)) <= 32)) AND (translate(SUBSTRING(canonical_id FROM 3), 'abcdefghijklmnopqrstuvwxyz0123456789-/:;()₴&@".,?!''[]{}#%^*+=_\|~<>€$£•'::text, ''::text) = ''::text)))),
     CONSTRAINT user_identities_canonical_type_check CHECK (((canonical_type)::text = 'person'::text)),
     CONSTRAINT user_identities_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('disabled'::character varying)::text])))
 );
@@ -427,6 +427,7 @@ ALTER TABLE ONLY public.provider_identity_bindings
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260828010000'),
 ('20260828000000'),
 ('20260827154500'),
 ('20260827134500'),

@@ -6,6 +6,7 @@ module PrismHub
       class App
         REQUEST_ID_KEY = "prism_hub.request_id".freeze
         API_PATHS = %w[
+          /api/v1/actors/onboard
           /api/v1/actors/resolve
           /api/v1/channels
           /api/v1/publications
@@ -102,7 +103,8 @@ module PrismHub
 
         def input_status(error)
           case error.code
-          when "hub.http.body.invalid_json", "hub.actor.request.invalid", "hub.actor.workspace_id.invalid"
+          when "hub.http.body.invalid_json", "hub.actor.request.invalid", "hub.actor.workspace_id.invalid",
+            "hub.actor_onboarding.request.invalid"
             400
           when /^hub\.provider_subject\./
             400

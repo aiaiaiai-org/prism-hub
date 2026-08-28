@@ -14,6 +14,7 @@ module PrismHub
             "user identities must reference a canonical person identity"
           )
         end
+        PublicUserId.new(canonical_identity.id)
 
         @id = reference(id, "id")
         @canonical_identity = canonical_identity

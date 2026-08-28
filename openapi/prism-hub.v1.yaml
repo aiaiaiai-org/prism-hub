@@ -3,7 +3,7 @@
 openapi: 3.1.0
 info:
   title: Prism Hub API
-  version: 0.1.0-alpha.5
+  version: 0.1.0-alpha.6
   summary: Versioned client boundary for Prism control-plane operations
   description: >-
     Clients authenticate with client-scoped opaque Hub credentials and use
@@ -89,6 +89,49 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ActorResolutionResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+  /api/v1/actors/onboard:
+    post:
+      operationId: onboardActor
+      summary: Resolve or create a provider-backed human actor
+      description: >-
+        Requires actors:onboard. Atomically resolves or creates the canonical
+        human identity, provider binding, personal workspace, and owner
+        membership. Existing and newly created actors return the same response
+        shape. Revoked, disabled, or incoherent identity states intentionally
+        return the same forbidden response without identity disclosure.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActorOnboardingRequest"
+            examples:
+              telegram:
+                summary: Telegram numeric user ID as opaque provider evidence
+                value:
+                  provider: telegram
+                  provider_scope: global
+                  subject_id: "123456789"
+      responses:
+        "200":
+          description: Stable canonical identity, personal workspace, and owner role
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActorOnboardingResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -283,7 +326,7 @@ components:
     Forbidden:
       description: >-
         Authenticated principal lacks the required capability or channel grant,
-        or the requested human actor is not authorized for the requested workspace
+        or the requested human actor cannot be resolved or onboarded
       headers:
         X-Request-ID:
           $ref: "#/components/headers/RequestId"
@@ -421,6 +464,21 @@ components:
           type: string
           minLength: 1
           maxLength: 512
+    ActorOnboardingRequest:
+      type: object
+      additionalProperties: false
+      required: [provider, provider_scope, subject_id]
+      properties:
+        provider:
+          type: string
+          pattern: "^[a-z][a-z0-9._-]{0,63}$"
+        provider_scope:
+          type: string
+          pattern: "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        subject_id:
+          type: string
+          minLength: 1
+          maxLength: 512
     CanonicalIdentity:
       type: object
       additionalProperties: false
@@ -430,8 +488,9 @@ components:
           const: person
         id:
           type: string
-          minLength: 1
-          maxLength: 255
+          minLength: 4
+          maxLength: 34
+          pattern: '^0x[a-z0-9/,:;()₴&@"?.!''{}\[\]#%^*+=_\\|~<>€$£•-]{2,32}$'
     ResolvedActor:
       type: object
       additionalProperties: false
@@ -449,6 +508,24 @@ components:
       properties:
         actor:
           $ref: "#/components/schemas/ResolvedActor"
+    OnboardedActor:
+      type: object
+      additionalProperties: false
+      required: [identity, workspace_id, role]
+      properties:
+        identity:
+          $ref: "#/components/schemas/CanonicalIdentity"
+        workspace_id:
+          $ref: "#/components/schemas/StableReference"
+        role:
+          const: owner
+    ActorOnboardingResponse:
+      type: object
+      additionalProperties: false
+      required: [actor]
+      properties:
+        actor:
+          $ref: "#/components/schemas/OnboardedActor"
     PublicationRequest:
       type: object
       additionalProperties: false

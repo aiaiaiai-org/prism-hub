@@ -23,4 +23,16 @@ class ProvisionUserIdentityTest < Minitest::Test
     assert_equal "hub.user_identity.subject.invalid", error.code
     assert_nil repository.canonical_identity
   end
+
+  def test_person_identity_requires_the_canonical_public_id_grammar
+    repository = Repository.new
+    use_case = PrismHub::UseCases::ProvisionUserIdentity.new(user_identity_repository: repository)
+
+    error = assert_raises(PrismHub::InputError) do
+      use_case.call(canonical_type: "person", canonical_id: "database-uuid")
+    end
+
+    assert_equal "hub.user_identity.public_id.invalid", error.code
+    assert_nil repository.canonical_identity
+  end
 end
