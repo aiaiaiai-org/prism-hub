@@ -3,7 +3,7 @@
 module PrismHub
   module Ports
     class ServicePrincipalRepository
-      def provision(workspace_id:, principal_id:, bot_instance_id:, capabilities:, channel_ids:)
+      def provision(principal_id:, capabilities:, channel_ids:)
         raise NotImplementedError
       end
     end

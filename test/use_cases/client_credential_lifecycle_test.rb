@@ -35,14 +35,13 @@ class ClientCredentialLifecycleTest < Minitest::Test
       repository: repository,
       token_generator: -> { TOKEN }
     ).call(
-      workspace_id: "personal",
       principal_id: "telegram-personal"
     )
 
     assert_equal TOKEN, issued.token
     assert_equal TOKEN, repository.issued.fetch(:token)
-    assert_equal "personal", repository.issued.fetch(:workspace_id)
     assert_equal "telegram-personal", repository.issued.fetch(:principal_id)
+    refute repository.issued.key?(:workspace_id)
     refute repository.issued.key?(:capabilities)
     refute repository.issued.key?(:channel_ids)
     refute repository.issued.key?(:bot_instance_id)

@@ -4,7 +4,7 @@ module PrismHub
   module Interfaces
     module Http
       class ActorResolutionEndpoint
-        REQUIRED_FIELDS = %w[provider provider_scope subject_id].freeze
+        REQUIRED_FIELDS = %w[workspace_id provider provider_scope subject_id].freeze
 
         def initialize(resolve_workspace_actor:, request_body:)
           @resolve_workspace_actor = resolve_workspace_actor
@@ -15,6 +15,7 @@ module PrismHub
           subject = actor_subject(@request_body.parse(request))
           context = @resolve_workspace_actor.call(
             authorisation_context: authorisation_context,
+            workspace_id: subject.fetch("workspace_id"),
             provider: subject.fetch("provider"),
             provider_scope: subject.fetch("provider_scope"),
             subject_id: subject.fetch("subject_id")
@@ -41,7 +42,7 @@ module PrismHub
 
           raise InputError.new(
             "hub.actor.request.invalid",
-            "actor request must contain only provider, provider_scope, and subject_id strings"
+            "actor request must contain only workspace_id, provider, provider_scope, and subject_id strings"
           )
         end
 

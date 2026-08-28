@@ -45,6 +45,7 @@ class ResolveWorkspaceActorTest < Minitest::Test
   def test_resolves_provider_evidence_into_a_workspace_scoped_actor
     context = @use_case.call(
       authorisation_context: authorisation_context,
+      workspace_id: "personal",
       provider: "telegram",
       provider_scope: "global",
       subject_id: "123456789"
@@ -55,12 +56,14 @@ class ResolveWorkspaceActorTest < Minitest::Test
     assert_equal @identity.canonical_identity, context.user_identity.canonical_identity
     assert_equal "owner", context.role
     assert_equal @subject, context.provider_subject
+    assert_equal "personal", @membership_repository.calls.first.fetch(:workspace_id)
   end
 
   def test_requires_machine_capability_before_repository_lookup
     error = assert_raises(PrismHub::AuthorisationError) do
       @use_case.call(
         authorisation_context: authorisation_context(capabilities: []),
+        workspace_id: "personal",
         provider: "telegram",
         provider_scope: "global",
         subject_id: "123456789"
@@ -125,6 +128,7 @@ class ResolveWorkspaceActorTest < Minitest::Test
   def resolve
     @use_case.call(
       authorisation_context: authorisation_context,
+      workspace_id: "personal",
       provider: "telegram",
       provider_scope: "global",
       subject_id: "123456789"
@@ -134,7 +138,6 @@ class ResolveWorkspaceActorTest < Minitest::Test
   def authorisation_context(capabilities: [PrismHub::Domain::Capabilities::ACTORS_RESOLVE])
     PrismHub::Domain::AuthorisationContext.new(
       principal_id: "bot-personal",
-      workspace_id: "personal",
       capabilities: capabilities,
       allowed_channel_ids: []
     )

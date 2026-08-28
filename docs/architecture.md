@@ -27,19 +27,27 @@ ActiveRecord record classes live only under the adapter namespace. Domain,
 use-case, and port files remain framework-independent and are checked in CI for
 forbidden outward dependencies.
 
-A service principal is bound to one workspace and one `bot_instance_id`. Grants
-belong to that stable principal, never to an individual credential. Credential
-issue therefore cannot mutate grants. Credential issue generates a high-entropy
+A service principal identifies one machine client globally; it does not identify
+a human workspace or a bot lifecycle instance. Grants belong to that stable
+principal, never to an individual credential. Credential issue therefore cannot
+mutate grants. Credential issue generates a high-entropy
 opaque `prism_client_v1_…` secret and stores only its SHA-256 digest. Expiry and
 revocation are evaluated during credential lookup. Rotation creates the
 replacement and revokes the prior credential in one database transaction;
 revocation is idempotent.
 
 The HTTP authenticator extracts a bearer secret and resolves it through the
-credential repository to an immutable `AuthorisationContext`. Missing,
-malformed, expired, or revoked credentials produce `401`. A valid principal
+credential repository to an immutable workspace-independent
+`AuthorisationContext`. Missing, malformed, expired, or revoked credentials
+produce `401`. A valid principal
 without the required capability or channel grant produces `403` from application
 use cases.
+
+Actor resolution receives an explicit target workspace and proves access through
+the resolved human identity's active `WorkspaceMembership`. A machine credential
+can therefore serve multiple workspaces without becoming evidence for any one
+human tenant. Historical workspace and bot-instance columns are retained only as
+nullable migration data until the separate bot lifecycle model is introduced.
 
 Channel discovery requires `channels:read` and paginates only across granted
 channels, so ungranted channel metadata is not exposed. Publication validation

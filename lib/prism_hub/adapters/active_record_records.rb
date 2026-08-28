@@ -6,10 +6,6 @@ module PrismHub
       class Workspace < ::ActiveRecord::Base
         self.table_name = "workspaces"
 
-        has_many :service_principals,
-          class_name: "PrismHub::Adapters::ActiveRecordRecords::ServicePrincipal",
-          inverse_of: :workspace,
-          dependent: :restrict_with_exception
         has_many :workspace_memberships,
           class_name: "PrismHub::Adapters::ActiveRecordRecords::WorkspaceMembership",
           inverse_of: :workspace,
@@ -19,9 +15,6 @@ module PrismHub
       class ServicePrincipal < ::ActiveRecord::Base
         self.table_name = "service_principals"
 
-        belongs_to :workspace,
-          class_name: "PrismHub::Adapters::ActiveRecordRecords::Workspace",
-          inverse_of: :service_principals
         has_many :client_credentials,
           class_name: "PrismHub::Adapters::ActiveRecordRecords::ClientCredential",
           inverse_of: :service_principal,

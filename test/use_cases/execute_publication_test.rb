@@ -59,7 +59,6 @@ class ExecutePublicationTest < Minitest::Test
         request_id: "request-test-1",
         authorisation_context: PrismHub::Domain::AuthorisationContext.new(
           principal_id: "telegram-personal",
-          workspace_id: "personal",
           capabilities: [PrismHub::Domain::Capabilities::PUBLICATIONS_VALIDATE],
           allowed_channel_ids: ["personal-threads"]
         )
@@ -75,7 +74,6 @@ class ExecutePublicationTest < Minitest::Test
   def publish_context(channels:)
     PrismHub::Domain::AuthorisationContext.new(
       principal_id: "telegram-personal",
-      workspace_id: "personal",
       capabilities: [PrismHub::Domain::Capabilities::PUBLICATIONS_PUBLISH],
       allowed_channel_ids: channels
     )

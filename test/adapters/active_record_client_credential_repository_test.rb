@@ -28,7 +28,6 @@ class ActiveRecordClientCredentialRepositoryTest < Minitest::Test
     assert_equal Digest::SHA256.hexdigest(TOKEN), credential.token_digest
 
     context = @repository.authenticate(token: TOKEN, now: NOW)
-    assert_equal "personal", context.workspace_id
     assert_equal "telegram-personal", context.principal_id
     assert_equal ["channels:read", "publications:publish"], context.capabilities
     assert_equal ["personal-threads"], context.allowed_channel_ids
@@ -43,6 +42,23 @@ class ActiveRecordClientCredentialRepositoryTest < Minitest::Test
     assert_equal ["personal-threads"], context.allowed_channel_ids
     assert_equal 1, PrismHub::Adapters::ActiveRecordRecords::CapabilityGrant.where(capability: "channels:read").count
     assert_equal 1, PrismHub::Adapters::ActiveRecordRecords::ChannelGrant.where(channel_id: "personal-threads").count
+  end
+
+  def test_legacy_workspace_metadata_does_not_scope_machine_authentication
+    workspace = PrismHub::Adapters::ActiveRecordRecords::Workspace.create!(
+      identifier: "legacy-personal",
+      status: "disabled"
+    )
+    PrismHub::Adapters::ActiveRecordRecords::ServicePrincipal.first.update!(
+      legacy_workspace_id: workspace.id,
+      legacy_bot_instance_id: "legacy-telegram"
+    )
+    issue(TOKEN)
+
+    context = @repository.authenticate(token: TOKEN, now: NOW)
+
+    assert_equal "telegram-personal", context.principal_id
+    refute_respond_to context, :workspace_id
   end
 
   def test_expired_or_revoked_credentials_do_not_authenticate
@@ -75,7 +91,6 @@ class ActiveRecordClientCredentialRepositoryTest < Minitest::Test
   def test_issue_requires_an_explicitly_provisioned_service_principal
     error = assert_raises(PrismHub::ServicePrincipalNotFoundError) do
       @repository.issue(
-        workspace_id: "other",
         principal_id: "missing",
         token: ROTATED_TOKEN,
         expires_at: nil
@@ -89,9 +104,7 @@ class ActiveRecordClientCredentialRepositoryTest < Minitest::Test
 
   def provision_principal
     @principals.provision(
-      workspace_id: "personal",
       principal_id: "telegram-personal",
-      bot_instance_id: "prisma-telegram",
       capabilities: ["publications:publish", "channels:read"],
       channel_ids: ["personal-threads"]
     )
@@ -99,7 +112,6 @@ class ActiveRecordClientCredentialRepositoryTest < Minitest::Test
 
   def issue(token, expires_at: nil)
     @repository.issue(
-      workspace_id: "personal",
       principal_id: "telegram-personal",
       token: token,
       expires_at: expires_at

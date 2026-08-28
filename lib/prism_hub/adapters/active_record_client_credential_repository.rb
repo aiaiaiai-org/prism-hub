@@ -15,24 +15,21 @@ module PrismHub
         return nil if credential.expires_at && credential.expires_at <= now
 
         principal = credential.service_principal
-        workspace = principal.workspace
-        return nil unless principal.status == STATUS_ACTIVE && workspace.status == STATUS_ACTIVE
+        return nil unless principal.status == STATUS_ACTIVE
 
         Domain::AuthorisationContext.new(
           principal_id: principal.identifier,
-          workspace_id: workspace.identifier,
           capabilities: principal.capability_grants.map(&:capability),
           allowed_channel_ids: principal.channel_grants.map(&:channel_id)
         )
       end
 
-      def issue(workspace_id:, principal_id:, token:, expires_at:)
+      def issue(principal_id:, token:, expires_at:)
         validate_token!(token)
-        workspace_ref = reference(workspace_id, "workspace_id")
         principal_ref = reference(principal_id, "principal_id")
 
         credential = ::ActiveRecord::Base.transaction do
-          principal = find_active_principal!(workspace_ref, principal_ref)
+          principal = find_active_principal!(principal_ref)
           ActiveRecordRecords::ClientCredential.create!(
             service_principal: principal,
             token_digest: token_digest(token),
@@ -97,29 +94,12 @@ module PrismHub
 
       def credential_scope
         ActiveRecordRecords::ClientCredential.includes(
-          service_principal: [:workspace, :capability_grants, :channel_grants]
+          service_principal: [:capability_grants, :channel_grants]
         )
       end
 
-      def find_active_principal!(workspace_id, principal_id)
-        workspace = ActiveRecordRecords::Workspace.lock.find_by(identifier: workspace_id)
-        unless workspace
-          raise ServicePrincipalNotFoundError.new(
-            "hub.service_principal.not_found",
-            "service principal does not exist"
-          )
-        end
-        if workspace.status != STATUS_ACTIVE
-          raise ServicePrincipalConflictError.new(
-            "hub.workspace.disabled",
-            "disabled workspaces cannot issue client credentials"
-          )
-        end
-
-        principal = ActiveRecordRecords::ServicePrincipal.lock.find_by(
-          workspace: workspace,
-          identifier: principal_id
-        )
+      def find_active_principal!(principal_id)
+        principal = ActiveRecordRecords::ServicePrincipal.lock.find_by(identifier: principal_id)
         unless principal
           raise ServicePrincipalNotFoundError.new(
             "hub.service_principal.not_found",

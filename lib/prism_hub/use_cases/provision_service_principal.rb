@@ -7,11 +7,9 @@ module PrismHub
         @repository = repository
       end
 
-      def call(workspace_id:, principal_id:, bot_instance_id:, capabilities:, channel_ids:)
+      def call(principal_id:, capabilities:, channel_ids:)
         @repository.provision(
-          workspace_id: workspace_id,
           principal_id: principal_id,
-          bot_instance_id: bot_instance_id,
           capabilities: capabilities,
           channel_ids: channel_ids
         )
