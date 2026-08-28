@@ -13,21 +13,22 @@ expected_operations = {
   ["/api/v1/actors/resolve", "post"] => "resolveActor",
   ["/api/v1/actors/onboard", "post"] => "onboardActor",
   ["/api/v1/actors/personal/resolve", "post"] => "resolvePersonalActor",
+  ["/api/v1/bot-instances/personal/status", "post"] => "getPersonalBotStatus",
+  ["/api/v1/bot-instances/personal/pause", "post"] => "pausePersonalBot",
+  ["/api/v1/bot-instances/personal/resume", "post"] => "resumePersonalBot",
   ["/api/v1/channels", "get"] => "listChannels",
   ["/api/v1/publications/validate", "post"] => "validatePublication",
   ["/api/v1/publications", "post"] => "publishPublication"
 }
-protected_operations = [
-  ["/api/v1/actors/resolve", "post"],
-  ["/api/v1/actors/onboard", "post"],
-  ["/api/v1/actors/personal/resolve", "post"],
-  ["/api/v1/channels", "get"],
-  ["/api/v1/publications/validate", "post"],
-  ["/api/v1/publications", "post"]
+protected_operations = expected_operations.keys.reject { |route, _method| route == "/healthz" }.freeze
+lifecycle_routes = %w[
+  /api/v1/bot-instances/personal/status
+  /api/v1/bot-instances/personal/pause
+  /api/v1/bot-instances/personal/resume
 ].freeze
 
 raise "OpenAPI version drift" unless contract.fetch("openapi") == "3.1.0"
-raise "Hub API metadata version drift" unless contract.dig("info", "version") == "0.1.0-alpha.7"
+raise "Hub API metadata version drift" unless contract.dig("info", "version") == "0.1.0-alpha.8"
 
 expected_operations.each do |(route, method), operation_id|
   actual = contract.dig("paths", route, method, "operationId")
@@ -38,6 +39,18 @@ protected_operations.each do |route, method|
   responses = contract.dig("paths", route, method, "responses")
   %w[401 403].each do |status|
     raise "#{method.upcase} #{route} must declare #{status}" unless responses.key?(status)
+  end
+end
+
+lifecycle_routes.each do |route|
+  responses = contract.dig("paths", route, "post", "responses")
+  raise "POST #{route} must declare 409" unless responses.key?("409")
+
+  request_ref = contract.dig(
+    "paths", route, "post", "requestBody", "content", "application/json", "schema", "$ref"
+  )
+  unless request_ref == "#/components/schemas/BotLifecycleRequest"
+    raise "POST #{route} must use the provider-evidence lifecycle request"
   end
 end
 
@@ -60,6 +73,19 @@ unless onboarding_request.fetch("additionalProperties") == false &&
     onboarding_request.fetch("required").sort == %w[provider provider_scope subject_id] &&
     onboarding_request.fetch("properties").keys.sort == %w[provider provider_scope subject_id]
   raise "actor onboarding request must expose only provider subject fields"
+end
+
+lifecycle_request_ref = contract.dig("components", "schemas", "BotLifecycleRequest", "$ref")
+unless lifecycle_request_ref == "#/components/schemas/ActorOnboardingRequest"
+  raise "bot lifecycle request must reuse provider evidence without internal ids"
+end
+
+lifecycle_state = contract.dig("components", "schemas", "BotLifecycleState")
+unless lifecycle_state.fetch("additionalProperties") == false &&
+    lifecycle_state.fetch("required") == ["status"] &&
+    lifecycle_state.fetch("properties").keys == ["status"] &&
+    lifecycle_state.dig("properties", "status", "enum").sort == %w[active disabled paused]
+  raise "bot lifecycle response must expose only the lifecycle status"
 end
 
 onboarded_actor = contract.dig("components", "schemas", "OnboardedActor")

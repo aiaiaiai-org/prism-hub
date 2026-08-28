@@ -27,6 +27,11 @@ module PrismHub
           onboarding_repository: Adapters::ActiveRecordIdentityOnboardingRepository.new,
           public_user_id_generator: Adapters::SecurePublicUserIdGenerator.new
         )
+        bot_lifecycle = UseCases::PersonalBotLifecycle.new(
+          resolve_personal_actor: resolve_personal_actor,
+          bot_instance_repository: Adapters::ActiveRecordBotInstanceRepository.new,
+          clock: clock
+        )
         validate = execution_use_case(
           "validate",
           channels: channels,
@@ -61,6 +66,21 @@ module PrismHub
               resolve_workspace_actor: resolve_actor,
               request_body: request_body
             ),
+            ["POST", "/api/v1/bot-instances/personal/status"] => lifecycle_endpoint(
+              bot_lifecycle,
+              :status,
+              request_body
+            ),
+            ["POST", "/api/v1/bot-instances/personal/pause"] => lifecycle_endpoint(
+              bot_lifecycle,
+              :pause,
+              request_body
+            ),
+            ["POST", "/api/v1/bot-instances/personal/resume"] => lifecycle_endpoint(
+              bot_lifecycle,
+              :resume,
+              request_body
+            ),
             ["GET", "/api/v1/channels"] => Interfaces::Http::ChannelsEndpoint.new(
               list_channels: list_channels,
               cursor: Interfaces::Http::ChannelCursor.new
@@ -85,6 +105,14 @@ module PrismHub
       end
 
       private
+
+      def lifecycle_endpoint(lifecycle, operation, request_body)
+        Interfaces::Http::PersonalBotLifecycleEndpoint.new(
+          lifecycle: lifecycle,
+          operation: operation,
+          request_body: request_body
+        )
+      end
 
       def legacy_authentication(env, channels)
         enabled = boolean(

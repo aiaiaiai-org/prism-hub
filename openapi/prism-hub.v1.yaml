@@ -3,7 +3,7 @@
 openapi: 3.1.0
 info:
   title: Prism Hub API
-  version: 0.1.0-alpha.7
+  version: 0.1.0-alpha.8
   summary: Versioned client boundary for Prism control-plane operations
   description: >-
     Clients authenticate with client-scoped opaque Hub credentials and use
@@ -185,6 +185,95 @@ paths:
           $ref: "#/components/responses/PayloadTooLarge"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
+  /api/v1/bot-instances/personal/status:
+    post:
+      operationId: getPersonalBotStatus
+      summary: Read the current personal bot lifecycle state
+      description: >-
+        Requires bot_instances:read and actors:resolve. The bearer credential
+        determines the machine principal while provider evidence resolves the
+        human and personal workspace server-side. Missing lifecycle state is
+        initialized as active; disabled state remains visible but cannot be
+        cleared through the normal resume operation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BotLifecycleRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/BotLifecycleResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+  /api/v1/bot-instances/personal/pause:
+    post:
+      operationId: pausePersonalBot
+      summary: Pause the personal bot without stopping its process
+      description: >-
+        Requires bot_instances:manage and actors:resolve. The human must remain
+        the active owner of the server-derived personal workspace when the
+        lifecycle mutation commits. Repeated pause requests are idempotent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BotLifecycleRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/BotLifecycleResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+  /api/v1/bot-instances/personal/resume:
+    post:
+      operationId: resumePersonalBot
+      summary: Resume a paused personal bot
+      description: >-
+        Requires bot_instances:manage and actors:resolve. Repeated resume
+        requests are idempotent. A disabled instance cannot be recovered through
+        this user-controlled operation and returns a typed conflict.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BotLifecycleRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/BotLifecycleResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
   /api/v1/publications/validate:
     post:
       operationId: validatePublication
@@ -348,6 +437,15 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/OperationResponse"
+    BotLifecycleResponse:
+      description: Current lifecycle state for the authenticated machine and resolved personal workspace
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/BotLifecycleResponse"
     BadRequest:
       description: Malformed JSON or invalid request shape
       headers:
@@ -370,6 +468,15 @@ components:
       description: >-
         Authenticated principal lacks the required capability or channel grant,
         or the requested human actor cannot be resolved or onboarded
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: Lifecycle state conflicts with the requested reversible operation
       headers:
         X-Request-ID:
           $ref: "#/components/headers/RequestId"
@@ -522,6 +629,8 @@ components:
           type: string
           minLength: 1
           maxLength: 512
+    BotLifecycleRequest:
+      $ref: "#/components/schemas/ActorOnboardingRequest"
     CanonicalIdentity:
       type: object
       additionalProperties: false
@@ -569,6 +678,21 @@ components:
       properties:
         actor:
           $ref: "#/components/schemas/OnboardedActor"
+    BotLifecycleState:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [active, paused, disabled]
+    BotLifecycleResponse:
+      type: object
+      additionalProperties: false
+      required: [bot_instance]
+      properties:
+        bot_instance:
+          $ref: "#/components/schemas/BotLifecycleState"
     PublicationRequest:
       type: object
       additionalProperties: false

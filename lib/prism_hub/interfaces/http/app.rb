@@ -9,6 +9,9 @@ module PrismHub
           /api/v1/actors/onboard
           /api/v1/actors/personal/resolve
           /api/v1/actors/resolve
+          /api/v1/bot-instances/personal/pause
+          /api/v1/bot-instances/personal/resume
+          /api/v1/bot-instances/personal/status
           /api/v1/channels
           /api/v1/publications
           /api/v1/publications/validate
@@ -63,6 +66,14 @@ module PrismHub
             details: error.details,
             request_id: request_id
           )
+        rescue BotInstanceConflictError => error
+          JsonResponse.error(
+            409,
+            error.code,
+            error.message,
+            details: error.details,
+            request_id: request_id
+          )
         rescue ExecutionUnavailableError => error
           JsonResponse.error(503, error.code, error.message, request_id: request_id)
         rescue StandardError => error
@@ -105,7 +116,8 @@ module PrismHub
         def input_status(error)
           case error.code
           when "hub.http.body.invalid_json", "hub.actor.request.invalid", "hub.actor.workspace_id.invalid",
-            "hub.actor_onboarding.request.invalid", "hub.personal_actor.request.invalid"
+            "hub.actor_onboarding.request.invalid", "hub.personal_actor.request.invalid",
+            "hub.bot_instance.request.invalid"
             400
           when /^hub\.provider_subject\./
             400
