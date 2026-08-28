@@ -12,24 +12,19 @@ module PrismHub
       def status(authorisation_context:, provider:, provider_scope:, subject_id:)
         require_capability!(authorisation_context, Domain::Capabilities::BOT_INSTANCES_READ)
         actor = resolve_actor(authorisation_context, provider, provider_scope, subject_id)
-        @bot_instance_repository.ensure(
-          principal_id: actor.principal_id,
-          workspace_id: actor.workspace_id,
-          actor_user_identity_id: actor.user_identity.id,
-          occurred_at: @clock.call
-        )
+        call_repository(:ensure, actor)
       end
 
       def pause(authorisation_context:, provider:, provider_scope:, subject_id:)
         require_capability!(authorisation_context, Domain::Capabilities::BOT_INSTANCES_MANAGE)
         actor = resolve_actor(authorisation_context, provider, provider_scope, subject_id)
-        mutate(:pause, actor)
+        call_repository(:pause, actor)
       end
 
       def resume(authorisation_context:, provider:, provider_scope:, subject_id:)
         require_capability!(authorisation_context, Domain::Capabilities::BOT_INSTANCES_MANAGE)
         actor = resolve_actor(authorisation_context, provider, provider_scope, subject_id)
-        mutate(:resume, actor)
+        call_repository(:resume, actor)
       end
 
       private
@@ -55,7 +50,7 @@ module PrismHub
         )
       end
 
-      def mutate(operation, actor)
+      def call_repository(operation, actor)
         @bot_instance_repository.public_send(
           operation,
           principal_id: actor.principal_id,
