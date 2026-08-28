@@ -74,10 +74,7 @@ module PrismHub
           membership.user_identity.canonical_identity == binding.user_identity.canonical_identity
         return if coherent
 
-        raise Error.new(
-          "hub.actor.invariant_violation",
-          "resolved identity and personal workspace membership are inconsistent"
-        )
+        deny_actor!
       end
     end
   end
