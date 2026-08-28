@@ -26,6 +26,8 @@ module PrismHub
   class ProviderIdentityBindingNotFoundError < Error; end
   class WorkspaceMembershipConflictError < Error; end
   class WorkspaceMembershipNotFoundError < Error; end
+  class BotInstanceConflictError < Error; end
+  class BotInstanceNotFoundError < Error; end
   class PublicUserIdConflictError < Error; end
   class IdentityOnboardingDeniedError < Error; end
   class AuthorisationError < Error; end
