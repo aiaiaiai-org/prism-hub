@@ -18,6 +18,11 @@ module PrismHub
           binding_repository: Adapters::ActiveRecordProviderIdentityBindingRepository.new,
           workspace_membership_repository: Adapters::ActiveRecordWorkspaceMembershipRepository.new
         )
+        resolve_personal_actor = UseCases::ResolvePersonalActor.new(
+          binding_repository: Adapters::ActiveRecordProviderIdentityBindingRepository.new,
+          workspace_membership_repository: Adapters::ActiveRecordWorkspaceMembershipRepository.new,
+          workspace_id_factory: Adapters::PersonalWorkspaceIdFactory.new
+        )
         onboard_actor = UseCases::OnboardProviderIdentity.new(
           onboarding_repository: Adapters::ActiveRecordIdentityOnboardingRepository.new,
           public_user_id_generator: Adapters::SecurePublicUserIdGenerator.new
@@ -43,6 +48,11 @@ module PrismHub
           authenticator: authenticator,
           health_endpoint: Interfaces::Http::HealthEndpoint.new,
           routes: {
+            ["POST", "/api/v1/actors/personal/resolve"] =>
+              Interfaces::Http::PersonalActorResolutionEndpoint.new(
+                resolve_personal_actor: resolve_personal_actor,
+                request_body: request_body
+              ),
             ["POST", "/api/v1/actors/onboard"] => Interfaces::Http::ActorOnboardingEndpoint.new(
               onboard_provider_identity: onboard_actor,
               request_body: request_body

@@ -130,4 +130,11 @@ retry with a fresh candidate. After the bounded retry budget is exhausted, Hub
 fails without publishing partial identity, binding, workspace, or membership
 state.
 
+`ResolvePersonalActor` is the read-only companion for stateless clients after
+onboarding. It derives the personal workspace reference from the existing
+canonical identity, requires its active `owner` membership, and returns the same
+actor projection without creating or reactivating any row. Unknown, revoked,
+disabled, missing, and incoherent states use the same non-enumerating actor
+denial as workspace-scoped resolution.
+
 <!-- © 2026 aiaiaiai · aiaiaiai.org -->

@@ -12,6 +12,7 @@ All notable changes to Prism Hub will be documented here.
 ### Added
 
 - Idempotent provider-backed actor onboarding with public user IDs and personal workspaces.
+- Read-only provider-backed personal actor resolution for stateless clients.
 - Initial Clean Architecture foundation.
 - Versioned channel, validation, and publication API contract.
 - Injected `prism-execution.v1` process adapter.

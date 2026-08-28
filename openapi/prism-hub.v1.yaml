@@ -3,7 +3,7 @@
 openapi: 3.1.0
 info:
   title: Prism Hub API
-  version: 0.1.0-alpha.6
+  version: 0.1.0-alpha.7
   summary: Versioned client boundary for Prism control-plane operations
   description: >-
     Clients authenticate with client-scoped opaque Hub credentials and use
@@ -125,6 +125,49 @@ paths:
       responses:
         "200":
           description: Stable canonical identity, personal workspace, and owner role
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActorOnboardingResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+  /api/v1/actors/personal/resolve:
+    post:
+      operationId: resolvePersonalActor
+      summary: Resolve an existing provider-backed personal actor
+      description: >-
+        Requires actors:resolve. Resolves only an existing active provider
+        binding, canonical identity, personal workspace, and owner membership.
+        This operation never creates or reactivates state. Unknown, revoked,
+        disabled, missing, or incoherent states intentionally return the same
+        forbidden response without identity disclosure.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActorOnboardingRequest"
+            examples:
+              telegram:
+                summary: Telegram numeric user ID as opaque provider evidence
+                value:
+                  provider: telegram
+                  provider_scope: global
+                  subject_id: "123456789"
+      responses:
+        "200":
+          description: Existing canonical identity, personal workspace, and owner role
           headers:
             X-Request-ID:
               $ref: "#/components/headers/RequestId"

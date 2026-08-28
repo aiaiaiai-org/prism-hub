@@ -12,6 +12,7 @@ expected_operations = {
   ["/healthz", "get"] => "getHealth",
   ["/api/v1/actors/resolve", "post"] => "resolveActor",
   ["/api/v1/actors/onboard", "post"] => "onboardActor",
+  ["/api/v1/actors/personal/resolve", "post"] => "resolvePersonalActor",
   ["/api/v1/channels", "get"] => "listChannels",
   ["/api/v1/publications/validate", "post"] => "validatePublication",
   ["/api/v1/publications", "post"] => "publishPublication"
@@ -19,13 +20,14 @@ expected_operations = {
 protected_operations = [
   ["/api/v1/actors/resolve", "post"],
   ["/api/v1/actors/onboard", "post"],
+  ["/api/v1/actors/personal/resolve", "post"],
   ["/api/v1/channels", "get"],
   ["/api/v1/publications/validate", "post"],
   ["/api/v1/publications", "post"]
 ].freeze
 
 raise "OpenAPI version drift" unless contract.fetch("openapi") == "3.1.0"
-raise "Hub API metadata version drift" unless contract.dig("info", "version") == "0.1.0-alpha.6"
+raise "Hub API metadata version drift" unless contract.dig("info", "version") == "0.1.0-alpha.7"
 
 expected_operations.each do |(route, method), operation_id|
   actual = contract.dig("paths", route, method, "operationId")
