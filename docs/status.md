@@ -22,6 +22,10 @@
 - `actors:resolve` machine capability and non-enumerating actor authorization failure semantics;
 - versioned `POST /api/v1/actors/resolve` accepting an explicit workspace and
   exposing only canonical human identity and workspace role;
+- canonical `0x` public user ID validation and cryptographically random allocation;
+- idempotent, concurrency-safe `POST /api/v1/actors/onboard` creating or resolving
+  provider identity, personal workspace, and owner membership as one transaction;
+- non-enumerating onboarding responses with fail-closed revoked and disabled states;
 - immutable `AuthorisationContext` returned by scoped credential authentication;
 - scoped HTTP bearer authentication with explicit `401` for invalid credentials;
 - explicit `403` capability and channel-grant enforcement in application use cases;
@@ -39,7 +43,6 @@
 
 ## Explicitly not implemented
 
-- idempotent resolve-or-create onboarding for previously unknown provider subjects;
 - explicit audited provider-identity ownership transfer;
 - explicit workspace membership role-change or reactivation operations;
 - persistent bot lifecycle state (`active`, `paused`, `disabled`);
@@ -55,7 +58,7 @@
 
 ## Next executable increments
 
-1. Resolve or create Telegram identities, personal workspaces, and owner memberships idempotently.
+1. Connect Telegram `/start` to the provider-backed onboarding endpoint.
 2. Add persistent Hub-owned bot lifecycle state (`active`, `paused`, `disabled`).
 3. Expose the focused lifecycle operations needed for `/stop`, `/resume`, and `/status`.
 4. Add Meta OAuth with encrypted provider credential storage after the actor and lifecycle boundaries are stable.

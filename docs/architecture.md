@@ -49,6 +49,13 @@ can therefore serve multiple workspaces without becoming evidence for any one
 human tenant. Historical workspace and bot-instance columns are retained only as
 nullable migration data until the separate bot lifecycle model is introduced.
 
+Actor onboarding is a separate machine capability and one atomic persistence
+boundary. Provider evidence is either resolved to its existing canonical human
+identity or committed together with a new public user ID, personal workspace,
+provider binding, and owner membership. The HTTP response does not reveal
+whether the transaction resolved or created state, and public user IDs never
+reuse provider identifiers or database UUIDs.
+
 Channel discovery requires `channels:read` and paginates only across granted
 channels, so ungranted channel metadata is not exposed. Publication validation
 and publishing require `publications:validate` and `publications:publish`

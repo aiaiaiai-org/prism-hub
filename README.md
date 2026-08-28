@@ -7,8 +7,8 @@ and invokes `prism-execution.v1` without duplicating provider behavior.
 This repository is the first executable foundation, not a claim that the whole
 control plane exists. It currently provides:
 
-- bearer-authenticated `v1` endpoints for actor resolution, channel discovery,
-  validation, and publication;
+- bearer-authenticated `v1` endpoints for idempotent actor onboarding, actor
+  resolution, channel discovery, validation, and publication;
 - multi-target publication requests whose provider, channel, and credential
   bindings stay server-side;
 - an injected Prism execution port with a hardened local-process adapter;
@@ -75,6 +75,7 @@ The canonical contract is [`openapi/prism-hub.v1.yaml`](openapi/prism-hub.v1.yam
 | Endpoint | Purpose |
 | --- | --- |
 | `GET /healthz` | Process liveness only |
+| `POST /api/v1/actors/onboard` | Resolve or create an identity, personal workspace, and owner membership |
 | `POST /api/v1/actors/resolve` | Resolve provider evidence and verify human workspace membership |
 | `GET /api/v1/channels` | Paginated public channels and publishing capabilities |
 | `POST /api/v1/publications/validate` | Complete Prism preflight, no publish action |

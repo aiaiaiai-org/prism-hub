@@ -27,7 +27,7 @@ class ActiveRecordProviderIdentityBindingRepositoryTest < Minitest::Test
 
   def test_active_provider_subject_cannot_be_reassigned_to_another_identity
     @repository.bind(user_identity: @first_identity, provider_subject: telegram_subject)
-    second_identity = provision_identity("another-person")
+    second_identity = provision_identity("0xanother-person")
 
     error = assert_raises(PrismHub::ProviderIdentityBindingConflictError) do
       @repository.bind(user_identity: second_identity, provider_subject: telegram_subject)
@@ -38,7 +38,7 @@ class ActiveRecordProviderIdentityBindingRepositoryTest < Minitest::Test
 
   def test_provider_scope_is_part_of_subject_identity
     first = @repository.bind(user_identity: @first_identity, provider_subject: telegram_subject(scope: "global"))
-    second_identity = provision_identity("another-person")
+    second_identity = provision_identity("0xanother-person")
     second = @repository.bind(
       user_identity: second_identity,
       provider_subject: telegram_subject(scope: "bot:secondary")

@@ -11,19 +11,21 @@ contract = YAML.safe_load_file(path, aliases: false)
 expected_operations = {
   ["/healthz", "get"] => "getHealth",
   ["/api/v1/actors/resolve", "post"] => "resolveActor",
+  ["/api/v1/actors/onboard", "post"] => "onboardActor",
   ["/api/v1/channels", "get"] => "listChannels",
   ["/api/v1/publications/validate", "post"] => "validatePublication",
   ["/api/v1/publications", "post"] => "publishPublication"
 }
 protected_operations = [
   ["/api/v1/actors/resolve", "post"],
+  ["/api/v1/actors/onboard", "post"],
   ["/api/v1/channels", "get"],
   ["/api/v1/publications/validate", "post"],
   ["/api/v1/publications", "post"]
 ].freeze
 
 raise "OpenAPI version drift" unless contract.fetch("openapi") == "3.1.0"
-raise "Hub API metadata version drift" unless contract.dig("info", "version") == "0.1.0-alpha.5"
+raise "Hub API metadata version drift" unless contract.dig("info", "version") == "0.1.0-alpha.6"
 
 expected_operations.each do |(route, method), operation_id|
   actual = contract.dig("paths", route, method, "operationId")
@@ -49,6 +51,26 @@ unless actor.fetch("additionalProperties") == false &&
     actor.fetch("required").sort == %w[identity role] &&
     actor.fetch("properties").keys.sort == %w[identity role]
   raise "resolved actor must expose only canonical identity and workspace role"
+end
+
+onboarding_request = contract.dig("components", "schemas", "ActorOnboardingRequest")
+unless onboarding_request.fetch("additionalProperties") == false &&
+    onboarding_request.fetch("required").sort == %w[provider provider_scope subject_id] &&
+    onboarding_request.fetch("properties").keys.sort == %w[provider provider_scope subject_id]
+  raise "actor onboarding request must expose only provider subject fields"
+end
+
+onboarded_actor = contract.dig("components", "schemas", "OnboardedActor")
+unless onboarded_actor.fetch("additionalProperties") == false &&
+    onboarded_actor.fetch("required").sort == %w[identity role workspace_id] &&
+    onboarded_actor.fetch("properties").keys.sort == %w[identity role workspace_id] &&
+    onboarded_actor.dig("properties", "role", "const") == "owner"
+  raise "onboarded actor must expose canonical identity, personal workspace, and owner role"
+end
+
+public_id = contract.dig("components", "schemas", "CanonicalIdentity", "properties", "id")
+unless public_id.fetch("minLength") == 4 && public_id.fetch("maxLength") == 34 && public_id.fetch("pattern")
+  raise "canonical person identity must expose the public 0x grammar"
 end
 
 target_properties = contract.dig(

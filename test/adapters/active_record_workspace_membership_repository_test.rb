@@ -42,7 +42,7 @@ class ActiveRecordWorkspaceMembershipRepositoryTest < Minitest::Test
   end
 
   def test_revoked_membership_cannot_be_granted_again
-    second_identity = provision_identity("second")
+    second_identity = provision_identity("0xsecond")
     @repository.grant(user_identity: second_identity, workspace_id: "personal", role: "member")
     @repository.revoke(
       user_identity_id: second_identity.id,
@@ -58,7 +58,7 @@ class ActiveRecordWorkspaceMembershipRepositoryTest < Minitest::Test
   end
 
   def test_revoke_is_idempotent_and_preserves_first_timestamp
-    second_identity = provision_identity("second")
+    second_identity = provision_identity("0xsecond")
     @repository.grant(user_identity: second_identity, workspace_id: "personal", role: "member")
     first_time = Time.utc(2026, 8, 27, 15, 51)
     second_time = Time.utc(2026, 8, 27, 16, 0)
@@ -93,7 +93,7 @@ class ActiveRecordWorkspaceMembershipRepositoryTest < Minitest::Test
   end
 
   def test_owner_can_be_revoked_when_another_active_owner_exists
-    second_identity = provision_identity("second-owner")
+    second_identity = provision_identity("0xsecond-owner")
     @repository.grant(user_identity: @identity, workspace_id: "personal", role: "owner")
     @repository.grant(user_identity: second_identity, workspace_id: "personal", role: "owner")
 
@@ -117,7 +117,7 @@ class ActiveRecordWorkspaceMembershipRepositoryTest < Minitest::Test
   end
 
   def test_find_returns_historical_revoked_membership
-    second_identity = provision_identity("second")
+    second_identity = provision_identity("0xsecond")
     @repository.grant(user_identity: second_identity, workspace_id: "personal", role: "member")
     @repository.revoke(
       user_identity_id: second_identity.id,
