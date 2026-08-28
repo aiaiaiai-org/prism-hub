@@ -92,6 +92,32 @@ class ResolvePersonalActorTest < Minitest::Test
     assert_equal "hub.actor.not_authorized", error.code
   end
 
+  def test_incoherent_personal_membership_does_not_disclose_identity_state
+    other_identity = PrismHub::Domain::UserIdentity.new(
+      id: "identity-2",
+      canonical_identity: PrismHub::Domain::CanonicalIdentityRef.new(type: "person", id: "0xother"),
+      status: "active"
+    )
+    incoherent_membership = PrismHub::Domain::WorkspaceMembership.new(
+      id: "membership-2",
+      workspace_id: "personal-1",
+      user_identity: other_identity,
+      role: "owner",
+      status: "active"
+    )
+
+    error = assert_raises(PrismHub::AuthorisationError) do
+      resolver(membership: incoherent_membership).call(
+        authorisation_context: authorisation_context,
+        provider: "telegram",
+        provider_scope: "global",
+        subject_id: "123456789"
+      )
+    end
+
+    assert_equal "hub.actor.not_authorized", error.code
+  end
+
   def test_requires_actor_resolution_capability_before_lookup
     error = assert_raises(PrismHub::AuthorisationError) do
       resolver.call(
