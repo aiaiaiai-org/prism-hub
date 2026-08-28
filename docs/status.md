@@ -26,6 +26,7 @@
 - idempotent, concurrency-safe `POST /api/v1/actors/onboard` creating or resolving
   provider identity, personal workspace, and owner membership as one transaction;
 - non-enumerating onboarding responses with fail-closed revoked and disabled states;
+- read-only personal actor resolution for stateless clients without implicit onboarding;
 - immutable `AuthorisationContext` returned by scoped credential authentication;
 - scoped HTTP bearer authentication with explicit `401` for invalid credentials;
 - explicit `403` capability and channel-grant enforcement in application use cases;

@@ -76,6 +76,7 @@ The canonical contract is [`openapi/prism-hub.v1.yaml`](openapi/prism-hub.v1.yam
 | --- | --- |
 | `GET /healthz` | Process liveness only |
 | `POST /api/v1/actors/onboard` | Resolve or create an identity, personal workspace, and owner membership |
+| `POST /api/v1/actors/personal/resolve` | Resolve an existing personal actor without creating state |
 | `POST /api/v1/actors/resolve` | Resolve provider evidence and verify human workspace membership |
 | `GET /api/v1/channels` | Paginated public channels and publishing capabilities |
 | `POST /api/v1/publications/validate` | Complete Prism preflight, no publish action |
