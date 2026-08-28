@@ -72,6 +72,12 @@ module PrismHub
           class_name: "PrismHub::Adapters::ActiveRecordRecords::WorkspaceMembership",
           inverse_of: :user_identity,
           dependent: :restrict_with_exception
+        has_many :social_account_accesses,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::SocialAccountAccess",
+          inverse_of: :user_identity,
+          dependent: :restrict_with_exception
+        has_many :social_accounts,
+          through: :social_account_accesses
         has_many :bot_instance_lifecycle_events,
           class_name: "PrismHub::Adapters::ActiveRecordRecords::BotInstanceLifecycleEvent",
           foreign_key: :actor_user_identity_id,
@@ -85,6 +91,28 @@ module PrismHub
         belongs_to :user_identity,
           class_name: "PrismHub::Adapters::ActiveRecordRecords::UserIdentity",
           inverse_of: :provider_identity_bindings
+      end
+
+      class SocialAccount < ::ActiveRecord::Base
+        self.table_name = "social_accounts"
+
+        has_many :social_account_accesses,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::SocialAccountAccess",
+          inverse_of: :social_account,
+          dependent: :restrict_with_exception
+        has_many :user_identities,
+          through: :social_account_accesses
+      end
+
+      class SocialAccountAccess < ::ActiveRecord::Base
+        self.table_name = "social_account_accesses"
+
+        belongs_to :social_account,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::SocialAccount",
+          inverse_of: :social_account_accesses
+        belongs_to :user_identity,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::UserIdentity",
+          inverse_of: :social_account_accesses
       end
 
       class WorkspaceMembership < ::ActiveRecord::Base

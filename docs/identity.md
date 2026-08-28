@@ -50,6 +50,34 @@ also active. Repository lookup can still return revoked bindings for audit and
 conflict detection. Provider subject IDs are redacted from default domain
 `inspect` output to reduce accidental identifier leakage in debug logs.
 
+## Social accounts and access
+
+A social publishing destination is not a human identity. `SocialAccount` stores
+the provider namespace plus the provider-native stable account identifier. The
+tuple `(provider, provider_account_id)` is globally unique in Hub. Mutable
+usernames and display names are presentation metadata only and never own the
+binding.
+
+Human access is represented separately by `SocialAccountAccess`:
+
+```text
+UserIdentity -> SocialAccountAccess -> SocialAccount
+```
+
+Its roles are `owner`, `manager`, and `publisher`; access can be `active` or
+`revoked`. This allows one person to connect multiple provider accounts and one
+provider account to be shared with multiple authorised people without cloning
+the account or conflating access with credentials.
+
+OAuth access tokens, refresh tokens, app secrets, and other provider credentials
+are deliberately not columns on either entity. Credential acquisition and
+secret storage belong to a later server-side authorization boundary. Raw provider
+credentials must never enter Telegram clients or become account identity keys.
+
+Concrete publish destinations remain a separate `Channel` concern. A social
+account may later own more than one channel/capability surface; this model does
+not collapse account ownership into destination selection.
+
 ## Workspace membership
 
 One `UserIdentity` is global within Hub rather than cloned per workspace.
