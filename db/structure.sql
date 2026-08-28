@@ -119,9 +119,9 @@ CREATE TABLE public.schema_migrations (
 
 CREATE TABLE public.service_principals (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
-    workspace_id uuid NOT NULL,
+    legacy_workspace_id uuid,
     identifier character varying(128) NOT NULL,
-    bot_instance_id character varying(128) NOT NULL,
+    legacy_bot_instance_id character varying(128),
     status character varying(32) DEFAULT 'active'::character varying NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
@@ -323,24 +323,17 @@ CREATE INDEX index_provider_identity_bindings_on_user_identity_id ON public.prov
 
 
 --
--- Name: index_service_principals_on_workspace_id; Type: INDEX; Schema: public; Owner: -
+-- Name: index_service_principals_on_identifier; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX index_service_principals_on_workspace_id ON public.service_principals USING btree (workspace_id);
-
-
---
--- Name: index_service_principals_on_workspace_id_and_bot_instance_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX index_service_principals_on_workspace_id_and_bot_instance_id ON public.service_principals USING btree (workspace_id, bot_instance_id);
+CREATE UNIQUE INDEX index_service_principals_on_identifier ON public.service_principals USING btree (identifier);
 
 
 --
--- Name: index_service_principals_on_workspace_id_and_identifier; Type: INDEX; Schema: public; Owner: -
+-- Name: index_service_principals_on_legacy_workspace_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX index_service_principals_on_workspace_id_and_identifier ON public.service_principals USING btree (workspace_id, identifier);
+CREATE INDEX index_service_principals_on_legacy_workspace_id ON public.service_principals USING btree (legacy_workspace_id);
 
 
 --
@@ -416,7 +409,7 @@ ALTER TABLE ONLY public.workspace_memberships
 --
 
 ALTER TABLE ONLY public.service_principals
-    ADD CONSTRAINT fk_rails_a2c5538b21 FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE RESTRICT;
+    ADD CONSTRAINT fk_rails_a2c5538b21 FOREIGN KEY (legacy_workspace_id) REFERENCES public.workspaces(id) ON DELETE RESTRICT;
 
 
 --
@@ -434,8 +427,8 @@ ALTER TABLE ONLY public.provider_identity_bindings
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260828000000'),
 ('20260827154500'),
 ('20260827134500'),
 ('20260827112400'),
 ('20260827094700');
-

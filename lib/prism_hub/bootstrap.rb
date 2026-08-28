@@ -79,7 +79,6 @@ module PrismHub
           legacy_token: env.fetch("PRISM_HUB_API_TOKEN"),
           legacy_context: Domain::AuthorisationContext.new(
             principal_id: "legacy-global",
-            workspace_id: "legacy-global",
             capabilities: Domain::Capabilities::ALL,
             allowed_channel_ids: channels.all_ids
           )

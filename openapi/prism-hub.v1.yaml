@@ -3,10 +3,10 @@
 openapi: 3.1.0
 info:
   title: Prism Hub API
-  version: 0.1.0-alpha.4
+  version: 0.1.0-alpha.5
   summary: Versioned client boundary for Prism control-plane operations
   description: >-
-    Clients authenticate with workspace-bound opaque Hub credentials and use
+    Clients authenticate with client-scoped opaque Hub credentials and use
     public Hub channel IDs. Provider channel and credential references remain
     server-side and are expanded only before invoking prism-execution.v1.
 servers:
@@ -61,9 +61,10 @@ paths:
       operationId: resolveActor
       summary: Resolve provider evidence into a workspace human actor
       description: >-
-        Requires actors:resolve. The provider subject is resolved only inside the
-        authenticated principal's workspace. Unknown, revoked, disabled, or
-        unbound actor states intentionally return the same forbidden response.
+        Requires actors:resolve. The machine credential proves only the calling
+        client; the requested workspace is authorized through the resolved
+        human's active membership. Unknown, revoked, disabled, or unbound actor
+        states intentionally return the same forbidden response.
       requestBody:
         required: true
         content:
@@ -74,6 +75,7 @@ paths:
               telegram:
                 summary: Telegram numeric user ID as an opaque provider subject
                 value:
+                  workspace_id: personal
                   provider: telegram
                   provider_scope: global
                   subject_id: "123456789"
@@ -218,7 +220,7 @@ components:
       scheme: bearer
       bearerFormat: prism_client_v1 opaque credential
       description: >-
-        Workspace-bound Hub credential. Missing, malformed, expired, or revoked
+        Client-scoped Hub credential. Missing, malformed, expired, or revoked
         credentials are unauthenticated. The legacy global token is accepted only
         when an explicit server-side migration flag enables it.
   parameters:
@@ -281,7 +283,7 @@ components:
     Forbidden:
       description: >-
         Authenticated principal lacks the required capability or channel grant,
-        or the requested human actor is not authorized for the principal's workspace
+        or the requested human actor is not authorized for the requested workspace
       headers:
         X-Request-ID:
           $ref: "#/components/headers/RequestId"
@@ -405,8 +407,10 @@ components:
     ActorResolutionRequest:
       type: object
       additionalProperties: false
-      required: [provider, provider_scope, subject_id]
+      required: [workspace_id, provider, provider_scope, subject_id]
       properties:
+        workspace_id:
+          $ref: "#/components/schemas/StableReference"
         provider:
           type: string
           pattern: "^[a-z][a-z0-9._-]{0,63}$"

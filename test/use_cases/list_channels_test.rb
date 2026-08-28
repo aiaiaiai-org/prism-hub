@@ -37,7 +37,6 @@ class ListChannelsTest < Minitest::Test
   def context(capabilities:, channels:)
     PrismHub::Domain::AuthorisationContext.new(
       principal_id: "telegram-personal",
-      workspace_id: "personal",
       capabilities: capabilities,
       allowed_channel_ids: channels
     )

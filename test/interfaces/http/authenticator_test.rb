@@ -78,7 +78,6 @@ class HttpAuthenticatorTest < Minitest::Test
   def context_for(channels)
     PrismHub::Domain::AuthorisationContext.new(
       principal_id: "telegram-personal",
-      workspace_id: "personal",
       capabilities: PrismHub::Domain::Capabilities::ALL,
       allowed_channel_ids: channels
     )

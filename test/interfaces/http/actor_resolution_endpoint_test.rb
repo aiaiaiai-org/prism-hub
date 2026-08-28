@@ -37,7 +37,14 @@ class ActorResolutionEndpointTest < Minitest::Test
 
   def test_returns_only_canonical_identity_and_workspace_role
     status, _headers, body = @endpoint.call(
-      request({"provider" => "telegram", "provider_scope" => "global", "subject_id" => "123456789"}),
+      request(
+        {
+          "workspace_id" => "personal",
+          "provider" => "telegram",
+          "provider_scope" => "global",
+          "subject_id" => "123456789"
+        }
+      ),
       authorisation_context: authorisation_context
     )
 
@@ -49,13 +56,20 @@ class ActorResolutionEndpointTest < Minitest::Test
     )
     refute_includes body.join, "123456789"
     assert_equal "123456789", @resolver.calls.first.fetch(:subject_id)
+    assert_equal "personal", @resolver.calls.first.fetch(:workspace_id)
   end
 
   def test_rejects_missing_extra_or_non_string_fields_before_resolution
     invalid_payloads = [
-      {"provider" => "telegram", "provider_scope" => "global"},
-      {"provider" => "telegram", "provider_scope" => "global", "subject_id" => 123456789},
+      {"workspace_id" => "personal", "provider" => "telegram", "provider_scope" => "global"},
       {
+        "workspace_id" => "personal",
+        "provider" => "telegram",
+        "provider_scope" => "global",
+        "subject_id" => 123456789
+      },
+      {
+        "workspace_id" => "personal",
         "provider" => "telegram",
         "provider_scope" => "global",
         "subject_id" => "123456789",
@@ -88,7 +102,6 @@ class ActorResolutionEndpointTest < Minitest::Test
   def authorisation_context
     PrismHub::Domain::AuthorisationContext.new(
       principal_id: "bot-personal",
-      workspace_id: "personal",
       capabilities: [PrismHub::Domain::Capabilities::ACTORS_RESOLVE],
       allowed_channel_ids: []
     )

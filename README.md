@@ -7,19 +7,19 @@ and invokes `prism-execution.v1` without duplicating provider behavior.
 This repository is the first executable foundation, not a claim that the whole
 control plane exists. It currently provides:
 
-- bearer-authenticated `v1` endpoints for channel discovery, validation, and
-  publication;
+- bearer-authenticated `v1` endpoints for actor resolution, channel discovery,
+  validation, and publication;
 - multi-target publication requests whose provider, channel, and credential
   bindings stay server-side;
 - an injected Prism execution port with a hardened local-process adapter;
 - explicit Clean Architecture boundaries and framework-independent tests;
 - an OpenAPI 3.1 contract intended for generated clients such as `prism-bot`.
 
-Accounts, OAuth flows, scheduling, persistence, approvals, audit history, and
-production packaging remain later increments. The current Prism runtime also
-needs a production composition root before this foundation can publish through
-the live Threads adapter; Instagram publishing is not implemented in `prism`
-yet.
+Social accounts, OAuth flows, scheduling, publication persistence, approvals,
+audit history, and production packaging remain later increments. The current
+Prism runtime also needs a production composition root before this foundation
+can publish through the live Threads adapter; Instagram publishing is not
+implemented in `prism` yet.
 
 ## Dependency boundary
 
@@ -43,7 +43,9 @@ references. Raw provider tokens are never accepted by the API.
 3. Install dependencies with `bundle install`.
 4. Run `bin/rails server`.
 
-The service refuses to boot without a Hub API token of at least 32 characters.
+Scoped client credentials are the primary authentication path. The legacy
+`PRISM_HUB_API_TOKEN` is read only when
+`PRISM_HUB_LEGACY_TOKEN_ENABLED=true`; otherwise Hub does not require it.
 `PRISM_HUB_CHANNELS_JSON` is an array of configured channels:
 
 ```json
@@ -73,6 +75,7 @@ The canonical contract is [`openapi/prism-hub.v1.yaml`](openapi/prism-hub.v1.yam
 | Endpoint | Purpose |
 | --- | --- |
 | `GET /healthz` | Process liveness only |
+| `POST /api/v1/actors/resolve` | Resolve provider evidence and verify human workspace membership |
 | `GET /api/v1/channels` | Paginated public channels and publishing capabilities |
 | `POST /api/v1/publications/validate` | Complete Prism preflight, no publish action |
 | `POST /api/v1/publications` | Explicit multi-target publish request |

@@ -18,7 +18,7 @@ class ActiveRecordServicePrincipalRepositoryTest < Minitest::Test
     provision
     provision
 
-    assert_equal 1, PrismHub::Adapters::ActiveRecordRecords::Workspace.count
+    assert_equal 0, PrismHub::Adapters::ActiveRecordRecords::Workspace.count
     assert_equal 1, PrismHub::Adapters::ActiveRecordRecords::ServicePrincipal.count
     assert_equal 2, PrismHub::Adapters::ActiveRecordRecords::CapabilityGrant.count
     assert_equal 1, PrismHub::Adapters::ActiveRecordRecords::ChannelGrant.count
@@ -37,14 +37,12 @@ class ActiveRecordServicePrincipalRepositoryTest < Minitest::Test
     assert_equal ["personal-threads"], principal.channel_grants.pluck(:channel_id).sort
   end
 
-  def test_existing_principal_cannot_be_rebound_to_another_bot_instance
+  def test_new_principal_has_no_legacy_workspace_or_bot_binding
     provision
 
-    error = assert_raises(PrismHub::ServicePrincipalConflictError) do
-      provision(bot_instance_id: "another-bot")
-    end
-
-    assert_equal "hub.service_principal.bot_instance_mismatch", error.code
+    principal = PrismHub::Adapters::ActiveRecordRecords::ServicePrincipal.first
+    assert_nil principal.legacy_workspace_id
+    assert_nil principal.legacy_bot_instance_id
   end
 
   def test_unknown_capability_is_rejected_before_persistence
@@ -59,14 +57,11 @@ class ActiveRecordServicePrincipalRepositoryTest < Minitest::Test
   private
 
   def provision(
-    bot_instance_id: "prisma-telegram",
     capabilities: ["channels:read", "publications:publish"],
     channel_ids: ["personal-threads"]
   )
     @repository.provision(
-      workspace_id: "personal",
       principal_id: "telegram-personal",
-      bot_instance_id: bot_instance_id,
       capabilities: capabilities,
       channel_ids: channel_ids
     )

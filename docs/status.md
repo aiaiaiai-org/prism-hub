@@ -4,7 +4,8 @@
 
 - Clean Architecture object boundaries and explicit composition root;
 - server-side channel configuration with public/private field separation;
-- workspace-bound service-principal persistence;
+- global machine-client `ServicePrincipal` persistence, independent of human
+  workspaces and bot lifecycle;
 - opaque client-credential issue, expiry, revocation, and atomic rotation;
 - SHA-256 digest-only credential storage; raw credentials are not persisted;
 - normalized capability and channel grants owned by service principals;
@@ -14,10 +15,13 @@
 - durable workspace memberships separated from global human identity;
 - explicit `owner`, `admin`, and `member` membership roles without implicit capability mapping;
 - membership revocation with stable history, no implicit reactivation, and last-owner protection;
-- generic workspace actor resolution combining machine capability, provider evidence, human identity, and active workspace membership;
+- generic workspace actor resolution combining machine capability, an explicit
+  target workspace, provider evidence, human identity, and active workspace
+  membership;
 - immutable `WorkspaceActorContext` preserving machine/human identity separation;
 - `actors:resolve` machine capability and non-enumerating actor authorization failure semantics;
-- versioned `POST /api/v1/actors/resolve` exposing only canonical human identity and workspace role;
+- versioned `POST /api/v1/actors/resolve` accepting an explicit workspace and
+  exposing only canonical human identity and workspace role;
 - immutable `AuthorisationContext` returned by scoped credential authentication;
 - scoped HTTP bearer authentication with explicit `401` for invalid credentials;
 - explicit `403` capability and channel-grant enforcement in application use cases;
@@ -35,7 +39,7 @@
 
 ## Explicitly not implemented
 
-- Telegram actor resolution in `prism-bot`;
+- idempotent resolve-or-create onboarding for previously unknown provider subjects;
 - explicit audited provider-identity ownership transfer;
 - explicit workspace membership role-change or reactivation operations;
 - persistent bot lifecycle state (`active`, `paused`, `disabled`);
@@ -51,9 +55,9 @@
 
 ## Next executable increments
 
-1. Adapt Telegram numeric user IDs in `prism-bot` to the generic Hub provider-subject contract.
+1. Resolve or create Telegram identities, personal workspaces, and owner memberships idempotently.
 2. Add persistent Hub-owned bot lifecycle state (`active`, `paused`, `disabled`).
-3. Expose the focused lifecycle operations needed for `/stop`, `/resume`, `/status`, and `/cancel`.
+3. Expose the focused lifecycle operations needed for `/stop`, `/resume`, and `/status`.
 4. Add Meta OAuth with encrypted provider credential storage after the actor and lifecycle boundaries are stable.
 5. Wire production packaging and infrastructure before activating live OAuth callbacks.
 

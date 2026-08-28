@@ -4,6 +4,11 @@ All notable changes to Prism Hub will be documented here.
 
 ## Unreleased
 
+### Changed
+
+- Decoupled machine client credentials from human workspaces and bot lifecycle instances.
+- Made actor resolution authorize an explicitly requested workspace through human membership.
+
 ### Added
 
 - Initial Clean Architecture foundation.

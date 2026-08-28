@@ -5,11 +5,10 @@ module PrismHub
     class AuthorisationContext
       CAPABILITY_PATTERN = /\A[a-z][a-z0-9._-]*:[a-z][a-z0-9._-]*\z/
 
-      attr_reader :principal_id, :workspace_id, :capabilities, :allowed_channel_ids
+      attr_reader :principal_id, :capabilities, :allowed_channel_ids
 
-      def initialize(principal_id:, workspace_id:, capabilities:, allowed_channel_ids:)
+      def initialize(principal_id:, capabilities:, allowed_channel_ids:)
         @principal_id = reference(principal_id, "principal_id")
-        @workspace_id = reference(workspace_id, "workspace_id")
         @capabilities = capability_set(capabilities)
         @allowed_channel_ids = reference_set(allowed_channel_ids, "allowed_channel_ids")
         freeze

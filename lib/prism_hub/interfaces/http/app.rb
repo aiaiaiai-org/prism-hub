@@ -102,7 +102,7 @@ module PrismHub
 
         def input_status(error)
           case error.code
-          when "hub.http.body.invalid_json", "hub.actor.request.invalid"
+          when "hub.http.body.invalid_json", "hub.actor.request.invalid", "hub.actor.workspace_id.invalid"
             400
           when /^hub\.provider_subject\./
             400

@@ -72,7 +72,8 @@ independent revoke operations.
 without merging them. The calling `ServicePrincipal` must independently have the
 `actors:resolve` capability. Only then may Hub resolve the provider subject,
 require an active provider binding and human identity, and require an active
-membership in the same workspace as the machine principal.
+membership in the explicitly requested workspace. The machine principal is
+global and never proves that workspace.
 
 Successful resolution produces an immutable `WorkspaceActorContext` containing
 the machine principal, workspace, canonical human identity, workspace role, and
@@ -88,17 +89,18 @@ normal authorization denial.
 The composed chain is:
 
 ```text
-client credential -> ServicePrincipal -> workspace + actors:resolve
+client credential -> ServicePrincipal -> actors:resolve
                                       |
 provider subject -> ProviderIdentityBinding -> UserIdentity
                                       |
-                             WorkspaceMembership
+requested workspace --------> WorkspaceMembership
                                       |
                            WorkspaceActorContext
 ```
 
-Telegram is only one adapter for this generic contract. Its numeric user ID will
-enter as `ProviderSubject(provider=telegram, provider_scope=global, subject_id=...)`
-at the client/API boundary.
+Telegram is only one adapter for this generic contract. Its numeric user ID
+enters as
+`ProviderSubject(provider=telegram, provider_scope=global, subject_id=...)` at
+the client/API boundary.
 
 <!-- © 2026 aiaiaiai · aiaiaiai.org -->

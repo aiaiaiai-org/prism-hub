@@ -23,7 +23,7 @@ protected_operations = [
 ].freeze
 
 raise "OpenAPI version drift" unless contract.fetch("openapi") == "3.1.0"
-raise "Hub API metadata version drift" unless contract.dig("info", "version") == "0.1.0-alpha.4"
+raise "Hub API metadata version drift" unless contract.dig("info", "version") == "0.1.0-alpha.5"
 
 expected_operations.each do |(route, method), operation_id|
   actual = contract.dig("paths", route, method, "operationId")
@@ -39,9 +39,9 @@ end
 
 actor_request = contract.dig("components", "schemas", "ActorResolutionRequest")
 unless actor_request.fetch("additionalProperties") == false &&
-    actor_request.fetch("required").sort == %w[provider provider_scope subject_id] &&
-    actor_request.fetch("properties").keys.sort == %w[provider provider_scope subject_id]
-  raise "actor resolution request must expose only provider subject fields"
+    actor_request.fetch("required").sort == %w[provider provider_scope subject_id workspace_id] &&
+    actor_request.fetch("properties").keys.sort == %w[provider provider_scope subject_id workspace_id]
+  raise "actor resolution request must expose one workspace and provider subject fields"
 end
 
 actor = contract.dig("components", "schemas", "ResolvedActor")
