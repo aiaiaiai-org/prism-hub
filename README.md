@@ -8,18 +8,21 @@ This repository is the first executable foundation, not a claim that the whole
 control plane exists. It currently provides:
 
 - bearer-authenticated `v1` endpoints for idempotent actor onboarding, actor
-  resolution, channel discovery, validation, and publication;
+  resolution, personal bot lifecycle, channel discovery, validation, and publication;
+- persistent per-workspace bot lifecycle state with `active`, `paused`, and
+  `disabled` semantics plus retained lifecycle events;
+- provider-global social-account persistence separated from human account access;
 - multi-target publication requests whose provider, channel, and credential
   bindings stay server-side;
 - an injected Prism execution port with a hardened local-process adapter;
 - explicit Clean Architecture boundaries and framework-independent tests;
 - an OpenAPI 3.1 contract intended for generated clients such as `prism-bot`.
 
-Social accounts, OAuth flows, scheduling, publication persistence, approvals,
-audit history, and production packaging remain later increments. The current
-Prism runtime also needs a production composition root before this foundation
-can publish through the live Threads adapter; Instagram publishing is not
-implemented in `prism` yet.
+OAuth flows, social-account provisioning and access-management APIs, scheduling,
+publication persistence, approvals, audit history, and production packaging
+remain later increments. The current Prism runtime also needs a production
+composition root before this foundation can publish through the live Threads
+adapter; Instagram publishing is not implemented in `prism` yet.
 
 ## Dependency boundary
 
@@ -78,6 +81,9 @@ The canonical contract is [`openapi/prism-hub.v1.yaml`](openapi/prism-hub.v1.yam
 | `POST /api/v1/actors/onboard` | Resolve or create an identity, personal workspace, and owner membership |
 | `POST /api/v1/actors/personal/resolve` | Resolve an existing personal actor without creating state |
 | `POST /api/v1/actors/resolve` | Resolve provider evidence and verify human workspace membership |
+| `POST /api/v1/bot-instances/personal/status` | Read the current personal bot lifecycle state |
+| `POST /api/v1/bot-instances/personal/pause` | Persistently pause the caller-owned personal bot instance |
+| `POST /api/v1/bot-instances/personal/resume` | Resume a paused personal bot instance |
 | `GET /api/v1/channels` | Paginated public channels and publishing capabilities |
 | `POST /api/v1/publications/validate` | Complete Prism preflight, no publish action |
 | `POST /api/v1/publications` | Explicit multi-target publish request |
