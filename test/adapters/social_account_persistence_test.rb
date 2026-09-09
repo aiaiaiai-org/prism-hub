@@ -145,8 +145,10 @@ class SocialAccountPersistenceTest < Minitest::Test
   end
 
   def test_parent_deletion_is_restricted_by_database_and_associations
-    rejects(ActiveRecord::InvalidForeignKey) { Records::SocialAccount.where(id: @account.id).delete_all }
-    rejects(ActiveRecord::InvalidForeignKey) { Records::UserIdentity.where(id: @person.id).delete_all }
+    account_error = rejects { Records::SocialAccount.where(id: @account.id).delete_all }
+    identity_error = rejects { Records::UserIdentity.where(id: @person.id).delete_all }
+    assert_instance_of PG::RestrictViolation, account_error.cause
+    assert_instance_of PG::RestrictViolation, identity_error.cause
 
     assert_raises(ActiveRecord::DeleteRestrictionError) { @account.destroy! }
     assert_raises(ActiveRecord::DeleteRestrictionError) { @person.destroy! }
