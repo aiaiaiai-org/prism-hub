@@ -224,9 +224,9 @@ CREATE TABLE public.social_account_accesses (
     revoked_at timestamp(6) without time zone,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
-    CONSTRAINT social_account_accesses_role_check CHECK (((role)::text = ANY ((ARRAY['owner'::character varying, 'manager'::character varying, 'publisher'::character varying])::text[]))),
+    CONSTRAINT social_account_accesses_role_check CHECK (((role)::text = ANY (ARRAY[('owner'::character varying)::text, ('manager'::character varying)::text, ('publisher'::character varying)::text]))),
     CONSTRAINT social_account_accesses_state_check CHECK (((((status)::text = 'active'::text) AND (revoked_at IS NULL)) OR (((status)::text = 'revoked'::text) AND (revoked_at IS NOT NULL)))),
-    CONSTRAINT social_account_accesses_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'revoked'::character varying])::text[])))
+    CONSTRAINT social_account_accesses_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('revoked'::character varying)::text])))
 );
 
 
@@ -721,3 +721,4 @@ INSERT INTO "schema_migrations" (version) VALUES
 ('20260827134500'),
 ('20260827112400'),
 ('20260827094700');
+
