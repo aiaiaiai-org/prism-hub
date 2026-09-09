@@ -52,11 +52,14 @@ conflict detection. Provider subject IDs are redacted from default domain
 
 ## Social accounts and access
 
-A social publishing destination is not a human identity. `SocialAccount` stores
+A social provider account is not a human identity. `SocialAccount` stores
 the provider namespace plus the provider-native stable account identifier. The
 tuple `(provider, provider_account_id)` is globally unique in Hub. Mutable
 usernames and display names are presentation metadata only and never own the
-binding.
+binding. This increment accepts only account IDs that are globally stable within
+the provider namespace. Provider/application-scoped IDs must not be stored here
+or disguised by changing the provider namespace. Supporting them requires an
+explicit scope discriminator in both the domain key and database unique index.
 
 Human access is represented separately by `SocialAccountAccess`:
 
@@ -68,6 +71,28 @@ Its roles are `owner`, `manager`, and `publisher`; access can be `active` or
 `revoked`. This allows one person to connect multiple provider accounts and one
 provider account to be shared with multiple authorised people without cloning
 the account or conflating access with credentials.
+
+A grant is one retained row per account/person pair. Its identity, role, and
+creation timestamp cannot change. Revocation changes active access to revoked
+with its first timestamp; repeating the same persisted state is safe. Ordinary
+writes cannot reactivate, reassign, delete, or change the role of a grant.
+PostgreSQL enforces these transition invariants even for bulk writes and
+association removal. Account identity keys are also immutable, while display
+metadata remains editable.
+
+Associations expose historical relationships, including revoked grants, and
+must never be used as authorization evidence. `can_publish?` requires both an
+active grant and an active human identity; it describes account-level eligibility
+only, not provider capability, channel permission, or machine authorization.
+A future publishing use case must resolve current persisted state and compose
+those independent checks at the execution boundary.
+
+This is a persistence foundation, not an access-management API. Explicit audited
+role changes, regrant, ownership transfer, and last-owner policy are deferred
+together with their focused repository ports and use cases. Ownerless accounts
+are representable for discovery/import; this schema does not promise that an
+account always has an active owner. Administrative retention/purge operations
+are outside ordinary application writes.
 
 OAuth access tokens, refresh tokens, app secrets, and other provider credentials
 are deliberately not columns on either entity. Credential acquisition and

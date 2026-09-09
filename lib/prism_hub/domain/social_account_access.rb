@@ -41,13 +41,13 @@ module PrismHub
       end
 
       def can_publish?
-        active? && %w[owner manager publisher].include?(role)
+        active? && user_identity.active? && ROLES.include?(role)
       end
 
       private
 
       def reference(value)
-        string = String(value)
+        string = String(value).dup
         return string.freeze unless string.empty?
 
         raise InputError.new(
@@ -57,7 +57,7 @@ module PrismHub
       end
 
       def enum(value, allowed, field)
-        string = String(value)
+        string = String(value).dup
         return string.freeze if allowed.include?(string)
 
         raise InputError.new(
@@ -68,7 +68,7 @@ module PrismHub
 
       def revoked_time(value)
         return nil if value.nil?
-        return value.utc.freeze if value.is_a?(Time)
+        return value.getutc.freeze if value.is_a?(Time)
 
         raise InputError.new(
           "hub.social_account_access.revoked_at.invalid",

@@ -19,7 +19,7 @@ module PrismHub
       private
 
       def reference(value, field)
-        string = String(value)
+        string = String(value).dup
         return string.freeze unless string.empty?
 
         raise InputError.new(
@@ -29,8 +29,8 @@ module PrismHub
       end
 
       def provider_name(value)
-        string = String(value)
-        return string.freeze if PROVIDER_PATTERN.match?(string)
+        string = String(value).dup
+        return string.freeze if string.valid_encoding? && PROVIDER_PATTERN.match?(string)
 
         raise InputError.new(
           "hub.social_account.provider.invalid",
@@ -39,8 +39,8 @@ module PrismHub
       end
 
       def opaque_reference(value, field, limit)
-        string = String(value)
-        return string.freeze if !string.empty? && string.length <= limit
+        string = String(value).dup
+        return string.freeze if !string.empty? && string.valid_encoding? && string.length <= limit && !string.match?(/[[:cntrl:]]/)
 
         raise InputError.new(
           "hub.social_account.#{field}.invalid",
@@ -51,8 +51,8 @@ module PrismHub
       def optional_metadata(value, field, limit)
         return nil if value.nil?
 
-        string = String(value)
-        return string.freeze if !string.empty? && string.length <= limit
+        string = String(value).dup
+        return string.freeze if !string.empty? && string.valid_encoding? && string.length <= limit && !string.include?("\0")
 
         raise InputError.new(
           "hub.social_account.#{field}.invalid",
