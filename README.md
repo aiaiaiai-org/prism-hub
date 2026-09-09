@@ -2,7 +2,7 @@
 
 Prism Hub is the control-plane boundary for Prism installations. It exposes one
 versioned client API, resolves public channel IDs to server-side Prism bindings,
-and invokes `prism-execution.v1` without duplicating provider behaviour.
+and invokes `prism-execution.v1` without duplicating provider behavior.
 
 This repository is the first executable foundation, not a claim that the whole
 control plane exists. It currently provides:
@@ -90,7 +90,7 @@ The canonical contract is [`openapi/prism-hub.v1.yaml`](openapi/prism-hub.v1.yam
 
 API calls require `Authorization: Bearer …`; publication calls also require an
 `Idempotency-Key` header. Validation never crosses the provider publish
-boundary. Publication behaviour is selected explicitly with
+boundary. Publication behavior is selected explicitly with
 `require_all_valid` or `independent`.
 
 Channel discovery accepts `limit` (1–100, default 50) and an opaque `cursor`.
@@ -114,8 +114,8 @@ Repository-specific boundaries are described in
 [`docs/architecture.md`](docs/architecture.md), and the precise implemented/TODO
 split is in [`docs/status.md`](docs/status.md).
 
-No public software licence has been selected for this repository yet. The
-source is publicly visible, but `prism`'s Apache-2.0 licence must not be inferred
+No public software license has been selected for this repository yet. The
+source is publicly visible, but `prism`'s Apache-2.0 license must not be inferred
 to apply here.
 
 <!-- © 2026 aiaiaiai · aiaiaiai.org -->
