@@ -103,7 +103,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Require a committed deterministic database structure
-        run: test -z "$(git status --porcelain -- db/structure.sql)"
+        run: git diff --exit-code -- db/structure.sql
 
       - name: Run tests
         run: bundle exec rails test

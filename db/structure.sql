@@ -24,6 +24,51 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public;
 COMMENT ON EXTENSION pgcrypto IS 'cryptographic functions';
 
 
+--
+-- Name: protect_social_account_access_history(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.protect_social_account_access_history() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION 'social account access must be revoked, not deleted'
+      USING ERRCODE = '23514', CONSTRAINT = 'social_account_accesses_retained_history';
+  END IF;
+  IF ROW(NEW.id, NEW.social_account_id, NEW.user_identity_id, NEW.role, NEW.created_at)
+    IS DISTINCT FROM ROW(OLD.id, OLD.social_account_id, OLD.user_identity_id, OLD.role, OLD.created_at) THEN
+    RAISE EXCEPTION 'social account access identity and role are immutable'
+      USING ERRCODE = '23514', CONSTRAINT = 'social_account_accesses_immutable_grant';
+  END IF;
+  IF OLD.status = 'revoked' AND
+    ROW(NEW.status, NEW.revoked_at) IS DISTINCT FROM ROW(OLD.status, OLD.revoked_at) THEN
+    RAISE EXCEPTION 'social account access revocation is final'
+      USING ERRCODE = '23514', CONSTRAINT = 'social_account_accesses_final_revocation';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+--
+-- Name: protect_social_account_key(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.protect_social_account_key() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF ROW(NEW.id, NEW.provider, NEW.provider_account_id)
+    IS DISTINCT FROM ROW(OLD.id, OLD.provider, OLD.provider_account_id) THEN
+    RAISE EXCEPTION 'social account identity is immutable'
+      USING ERRCODE = '23514', CONSTRAINT = 'social_accounts_immutable_key';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
@@ -52,9 +97,9 @@ CREATE TABLE public.bot_instance_lifecycle_events (
     from_status character varying(32),
     to_status character varying(32) NOT NULL,
     occurred_at timestamp(6) without time zone NOT NULL,
-    CONSTRAINT bot_instance_events_action_check CHECK (((action)::text = ANY ((ARRAY['created'::character varying, 'paused'::character varying, 'resumed'::character varying])::text[]))),
-    CONSTRAINT bot_instance_events_from_status_check CHECK (((from_status IS NULL) OR ((from_status)::text = ANY ((ARRAY['active'::character varying, 'paused'::character varying, 'disabled'::character varying])::text[])))),
-    CONSTRAINT bot_instance_events_to_status_check CHECK (((to_status)::text = ANY ((ARRAY['active'::character varying, 'paused'::character varying, 'disabled'::character varying])::text[]))),
+    CONSTRAINT bot_instance_events_action_check CHECK (((action)::text = ANY (ARRAY[('created'::character varying)::text, ('paused'::character varying)::text, ('resumed'::character varying)::text]))),
+    CONSTRAINT bot_instance_events_from_status_check CHECK (((from_status IS NULL) OR ((from_status)::text = ANY (ARRAY[('active'::character varying)::text, ('paused'::character varying)::text, ('disabled'::character varying)::text])))),
+    CONSTRAINT bot_instance_events_to_status_check CHECK (((to_status)::text = ANY (ARRAY[('active'::character varying)::text, ('paused'::character varying)::text, ('disabled'::character varying)::text]))),
     CONSTRAINT bot_instance_events_transition_check CHECK (((((action)::text = 'created'::text) AND (from_status IS NULL) AND ((to_status)::text = 'active'::text)) OR (((action)::text = 'paused'::text) AND ((from_status)::text = 'active'::text) AND ((to_status)::text = 'paused'::text)) OR (((action)::text = 'resumed'::text) AND ((from_status)::text = 'paused'::text) AND ((to_status)::text = 'active'::text))))
 );
 
@@ -73,7 +118,7 @@ CREATE TABLE public.bot_instances (
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
     CONSTRAINT bot_instances_state_check CHECK (((((status)::text = 'active'::text) AND (paused_at IS NULL) AND (disabled_at IS NULL)) OR (((status)::text = 'paused'::text) AND (paused_at IS NOT NULL) AND (disabled_at IS NULL)) OR (((status)::text = 'disabled'::text) AND (paused_at IS NULL) AND (disabled_at IS NOT NULL)))),
-    CONSTRAINT bot_instances_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'paused'::character varying, 'disabled'::character varying])::text[])))
+    CONSTRAINT bot_instances_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('paused'::character varying)::text, ('disabled'::character varying)::text])))
 );
 
 
@@ -163,6 +208,45 @@ CREATE TABLE public.service_principals (
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
     CONSTRAINT service_principals_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('disabled'::character varying)::text])))
+);
+
+
+--
+-- Name: social_account_accesses; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.social_account_accesses (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    social_account_id uuid NOT NULL,
+    user_identity_id uuid NOT NULL,
+    role character varying(32) NOT NULL,
+    status character varying(32) DEFAULT 'active'::character varying NOT NULL,
+    revoked_at timestamp(6) without time zone,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL,
+    CONSTRAINT social_account_accesses_role_check CHECK (((role)::text = ANY (ARRAY[('owner'::character varying)::text, ('manager'::character varying)::text, ('publisher'::character varying)::text]))),
+    CONSTRAINT social_account_accesses_state_check CHECK (((((status)::text = 'active'::text) AND (revoked_at IS NULL)) OR (((status)::text = 'revoked'::text) AND (revoked_at IS NOT NULL)))),
+    CONSTRAINT social_account_accesses_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('revoked'::character varying)::text])))
+);
+
+
+--
+-- Name: social_accounts; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.social_accounts (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    provider character varying(64) NOT NULL,
+    provider_account_id character varying(512) NOT NULL,
+    username character varying(255),
+    display_name character varying(255),
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL,
+    CONSTRAINT social_accounts_account_id_control_check CHECK (((provider_account_id)::text !~ '[[:cntrl:]]'::text)),
+    CONSTRAINT social_accounts_display_name_check CHECK (((display_name IS NULL) OR (char_length((display_name)::text) > 0))),
+    CONSTRAINT social_accounts_provider_account_id_check CHECK ((char_length((provider_account_id)::text) > 0)),
+    CONSTRAINT social_accounts_provider_check CHECK (((provider)::text ~ '^[a-z][a-z0-9._-]{0,63}$'::text)),
+    CONSTRAINT social_accounts_username_check CHECK (((username IS NULL) OR (char_length((username)::text) > 0)))
 );
 
 
@@ -289,6 +373,22 @@ ALTER TABLE ONLY public.service_principals
 
 
 --
+-- Name: social_account_accesses social_account_accesses_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.social_account_accesses
+    ADD CONSTRAINT social_account_accesses_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: social_accounts social_accounts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.social_accounts
+    ADD CONSTRAINT social_accounts_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: user_identities user_identities_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -331,6 +431,20 @@ CREATE UNIQUE INDEX idx_bot_instances_principal_workspace ON public.bot_instance
 --
 
 CREATE UNIQUE INDEX idx_provider_identity_bindings_subject ON public.provider_identity_bindings USING btree (provider, provider_scope, subject_id);
+
+
+--
+-- Name: idx_social_account_accesses_account_user; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_social_account_accesses_account_user ON public.social_account_accesses USING btree (social_account_id, user_identity_id);
+
+
+--
+-- Name: idx_social_accounts_provider_account; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_social_accounts_provider_account ON public.social_accounts USING btree (provider, provider_account_id);
 
 
 --
@@ -432,6 +546,20 @@ CREATE INDEX index_service_principals_on_legacy_workspace_id ON public.service_p
 
 
 --
+-- Name: index_social_account_accesses_on_social_account_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_social_account_accesses_on_social_account_id ON public.social_account_accesses USING btree (social_account_id);
+
+
+--
+-- Name: index_social_account_accesses_on_user_identity_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_social_account_accesses_on_user_identity_id ON public.social_account_accesses USING btree (user_identity_id);
+
+
+--
 -- Name: index_user_identities_on_canonical_type_and_canonical_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -460,6 +588,20 @@ CREATE UNIQUE INDEX index_workspaces_on_identifier ON public.workspaces USING bt
 
 
 --
+-- Name: social_account_accesses social_account_accesses_protect_history; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER social_account_accesses_protect_history BEFORE DELETE OR UPDATE ON public.social_account_accesses FOR EACH ROW EXECUTE FUNCTION public.protect_social_account_access_history();
+
+
+--
+-- Name: social_accounts social_accounts_protect_key; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER social_accounts_protect_key BEFORE UPDATE ON public.social_accounts FOR EACH ROW EXECUTE FUNCTION public.protect_social_account_key();
+
+
+--
 -- Name: workspace_memberships fk_rails_26c4c0bd41; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -473,6 +615,14 @@ ALTER TABLE ONLY public.workspace_memberships
 
 ALTER TABLE ONLY public.client_credentials
     ADD CONSTRAINT fk_rails_458e35f9f8 FOREIGN KEY (service_principal_id) REFERENCES public.service_principals(id) ON DELETE CASCADE;
+
+
+--
+-- Name: social_account_accesses fk_rails_45d457e0d5; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.social_account_accesses
+    ADD CONSTRAINT fk_rails_45d457e0d5 FOREIGN KEY (user_identity_id) REFERENCES public.user_identities(id) ON DELETE RESTRICT;
 
 
 --
@@ -548,12 +698,22 @@ ALTER TABLE ONLY public.bot_instance_lifecycle_events
 
 
 --
+-- Name: social_account_accesses fk_rails_ea248aecc3; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.social_account_accesses
+    ADD CONSTRAINT fk_rails_ea248aecc3 FOREIGN KEY (social_account_id) REFERENCES public.social_accounts(id) ON DELETE RESTRICT;
+
+
+--
 -- PostgreSQL database dump complete
 --
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260909120000'),
+('20260828050000'),
 ('20260828030000'),
 ('20260828010000'),
 ('20260828000000'),
