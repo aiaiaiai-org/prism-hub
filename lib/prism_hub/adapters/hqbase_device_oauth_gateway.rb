@@ -3,7 +3,7 @@
 
 module PrismHub
   module Adapters
-    class HqbaseDeviceOAuthGateway < Ports::MailOAuthGateway
+    class HqbaseDeviceOauthGateway < Ports::MailOauthGateway
       DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code".freeze
       SCOPES = %w[mail:read offline_access].freeze
       CLIENT_NAME = "Prism Hub".freeze
