@@ -26,7 +26,7 @@ module PrismHub
 
       def complete(authorization:)
         deadline = authorization.fetch("expires_at")
-        interval = Integer(authorization.fetch("interval_seconds"), 10)
+        interval = Integer(authorization.fetch("interval_seconds"))
 
         loop do
           raise_expired! if @clock.call >= deadline
