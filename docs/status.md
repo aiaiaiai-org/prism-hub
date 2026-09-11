@@ -53,6 +53,10 @@
   requesting only `mail:read offline_access` and never printing access or refresh tokens;
 - AES-256-GCM authenticated encryption for persisted HQBase access and refresh tokens,
   with the encryption key supplied only through server secret configuration;
+- server-side HQBase credential resolution for Prism Mail digest execution, with
+  `mail:read`, token type and expiry checks before the bounded worker process starts;
+- operator-run Prism Mail digest execution that never accepts or prints raw provider
+  tokens and canonicalizes the requested window before crossing the worker boundary;
 - OpenAPI 3.1 contract with required `401`/`403` protected-endpoint semantics and deterministic repository checks.
 
 ## Explicitly not implemented
@@ -60,9 +64,10 @@
 - explicit audited provider-identity ownership transfer;
 - explicit workspace membership role-change or reactivation operations;
 - public/admin social-account provisioning, discovery, role-change, regrant, ownership-transfer, or access-revocation operations;
-- a public/admin HTTP surface for identity, service-principal, credential provisioning, or HQBase OAuth connection;
+- a public/admin HTTP surface for identity, service-principal, credential provisioning, HQBase OAuth connection, or mail digest execution;
 - an explicit grant-update use case;
 - automatic OAuth access-token refresh, provider-token revocation, or credential rotation;
+- unattended mail scheduling or delivery;
 - binding persisted social accounts to provider credentials and concrete publishing channels;
 - database-backed channel configuration, drafts, jobs, scheduling, approvals, audit history, or durable publication idempotency;
 - media ingest, storage, transformation, or media-reference resolution;
@@ -72,8 +77,8 @@
 
 ## Next executable increments
 
-1. Wire the stored HQBase credential into the Prism Mail digest use case without exposing provider tokens to HTTP clients.
-2. Add refresh-token rotation for HQBase before scheduling unattended digest runs.
+1. Add HQBase refresh-token rotation before scheduling unattended digest runs.
+2. Add controlled scheduling and delivery around the mail digest use case.
 3. Add focused social-account repository/use-case operations without coupling account identity to provider credentials.
 4. Add Meta OAuth authorization behind the same encrypted provider-credential boundary.
 5. Bind authorized social accounts to server-side channels and credential references without exposing raw provider tokens to clients.
