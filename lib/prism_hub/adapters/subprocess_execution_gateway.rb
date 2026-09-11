@@ -16,6 +16,12 @@ module PrismHub
         response = parse_response(result.stdout)
         validate_response!(response, envelope.fetch("request_id"))
         response
+      rescue ProcessRunner::StartError => error
+        raise ExecutionUnavailableError.new(
+          "hub.prism.process.unavailable",
+          "Prism runtime process could not be started",
+          details: {"system_error" => error.system_error}
+        )
       end
 
       private

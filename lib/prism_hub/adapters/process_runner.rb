@@ -3,6 +3,15 @@
 module PrismHub
   module Adapters
     class ProcessRunner
+      class StartError < StandardError
+        attr_reader :system_error
+
+        def initialize(system_error)
+          super("process could not be started")
+          @system_error = system_error
+        end
+      end
+
       Result = Struct.new(
         :stdout,
         :stderr,
@@ -51,11 +60,7 @@ module PrismHub
         end
         result
       rescue SystemCallError => error
-        raise ExecutionUnavailableError.new(
-          "hub.prism.process.unavailable",
-          "Prism runtime process could not be started",
-          details: {"system_error" => error.class.name}
-        )
+        raise StartError.new(error.class.name), cause: error
       end
 
       private
