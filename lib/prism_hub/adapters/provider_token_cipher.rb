@@ -15,7 +15,7 @@ module PrismHub
       rescue ArgumentError => error
         raise ConfigurationError.new(
           "hub.provider_token_key.invalid",
-          "PRISM_HUB_PROVIDER_TOKEN_KEY_BASE64 must be strict base64 for exactly 32 bytes",
+          "PRISM_HUB_PROVIDER_TOKEN must be strict base64 for exactly 32 bytes",
           details: {"cause" => error.class.name}
         )
       end
