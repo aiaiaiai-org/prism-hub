@@ -35,7 +35,7 @@ class HqbaseDeviceOauthGatewayTest < Minitest::Test
         }
       ]
     )
-    gateway = PrismHub::Adapters::HqbaseDeviceOAuthGateway.new(
+    gateway = PrismHub::Adapters::HqbaseDeviceOauthGateway.new(
       origin: "https://mail.aiaiaiai.org",
       transport: transport
     )
@@ -77,7 +77,7 @@ class HqbaseDeviceOauthGatewayTest < Minitest::Test
         }
       ]
     )
-    gateway = PrismHub::Adapters::HqbaseDeviceOAuthGateway.new(
+    gateway = PrismHub::Adapters::HqbaseDeviceOauthGateway.new(
       origin: "https://mail.aiaiaiai.org",
       transport: transport
     )
@@ -95,7 +95,7 @@ class HqbaseDeviceOauthGatewayTest < Minitest::Test
 
   def test_rejects_non_origin_configuration
     error = assert_raises(PrismHub::ConfigurationError) do
-      PrismHub::Adapters::HqbaseDeviceOAuthGateway.new(origin: "https://mail.aiaiaiai.org/path")
+      PrismHub::Adapters::HqbaseDeviceOauthGateway.new(origin: "https://mail.aiaiaiai.org/path")
     end
 
     assert_equal "hub.mail.hqbase_origin.invalid", error.code
