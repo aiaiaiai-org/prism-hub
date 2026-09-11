@@ -3,7 +3,7 @@
 
 module PrismHub
   module Interfaces
-    module CLI
+    module Cli
       class ConnectHqbaseMail
         def initialize(connection:, out: $stdout)
           @connection = connection
