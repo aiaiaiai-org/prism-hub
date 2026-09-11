@@ -47,6 +47,7 @@ class ConnectHqbaseMailTest < Minitest::Test
 
     assert_equal [5], sleeps
     assert_equal "connected", result.fetch("status")
+    assert_equal "client-prism", repository.stored.fetch(:oauth_client_id)
     assert_equal "hqb_access_secret", repository.stored.fetch(:access_token)
     assert_equal "hqb_refresh_secret", repository.stored.fetch(:refresh_token)
     assert_equal "https://mail.aiaiaiai.org/api/v1", repository.stored.fetch(:resource)
