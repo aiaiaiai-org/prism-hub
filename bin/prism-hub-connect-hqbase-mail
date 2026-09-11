@@ -8,7 +8,7 @@ require_relative "../config/environment"
 cipher = PrismHub::Adapters::ProviderTokenCipher.new(
   key_base64: ENV.fetch("PRISM_HUB_PROVIDER_TOKEN_KEY_BASE64")
 )
-gateway = PrismHub::Adapters::HqbaseDeviceOAuthGateway.new(origin: ENV.fetch("HQBASE_ORIGIN"))
+gateway = PrismHub::Adapters::HqbaseDeviceOauthGateway.new(origin: ENV.fetch("HQBASE_ORIGIN"))
 repository = PrismHub::Adapters::ActiveRecordMailCredentialRepository.new(cipher: cipher)
 connection = PrismHub::UseCases::ConnectHqbaseMail.new(
   gateway: gateway,
