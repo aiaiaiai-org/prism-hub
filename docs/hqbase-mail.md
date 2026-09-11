@@ -9,10 +9,10 @@ Authorization for the exact resource `${HQBASE_ORIGIN}/api/v1`, and asks only fo
 then polls the token endpoint at the provider-supplied interval. The person opens
 the verification URL in a browser they control and explicitly approves access.
 
-After approval, Hub stores the access and refresh tokens encrypted with
-AES-256-GCM. Tokens are never printed. The encryption key is supplied through
-`PRISM_HUB_PROVIDER_TOKEN`, which must decode to exactly 32 random bytes and must
-live in the server secret store rather than source control.
+After approval, Hub stores the OAuth client identifier plus access and refresh
+tokens. Tokens are encrypted with AES-256-GCM and never printed. The encryption key
+is supplied through `PRISM_HUB_PROVIDER_TOKEN`, which must decode to exactly 32
+random bytes and must live in the server secret store rather than source control.
 
 Connect from the deployed Hub environment:
 
@@ -22,8 +22,10 @@ bundle exec ruby bin/prism-hub-connect-hqbase-mail
 
 Once connected, Hub can execute a Prism Mail digest without accepting or exposing
 an access token at the command boundary. It resolves and decrypts the active HQBase
-credential server-side, verifies `mail:read`, rejects an expired access token, and
-passes the token only to the bounded Prism Mail subprocess environment.
+credential server-side, verifies `mail:read`, and rotates the access/refresh token
+pair through the original public OAuth client when the access token is expired or
+within 60 seconds of expiry. The rotated pair replaces the old encrypted credential
+before the bounded Prism Mail worker starts.
 
 ```sh
 PRISM_MAIL_MAILBOX_ID=<mailbox-id> \
@@ -44,8 +46,13 @@ Required server configuration:
 - `PRISM_MAIL_TIMEOUT_SECONDS=30` or another positive timeout;
 - the normal Hub `DATABASE_URL` and Rails runtime configuration.
 
+Credentials created before OAuth client identifiers were persisted remain usable
+until their access token needs refresh; at that point Hub fails closed with a
+reconnect-required error instead of guessing a client identity. HQBase `invalid_grant`
+also requires reconnection unless Hub observes that another process already stored a
+newer rotated credential.
+
 Connection and digest commands are operator boundaries, not public Hub HTTP
-endpoints. Automatic refresh-token rotation, revocation, scheduling and delivery
-remain separate increments.
+endpoints. Provider revocation, scheduling and delivery remain separate increments.
 
 <!-- © 2026 aiaiaiai · aiaiaiai.org -->
