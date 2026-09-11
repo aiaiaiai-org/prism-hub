@@ -1,0 +1,60 @@
+#!/usr/bin/env ruby
+# © 2026 aiaiaiai · aiaiaiai.org
+# SPDX-License-Identifier: Apache-2.0
+
+ENV["RAILS_ENV"] ||= "production"
+require_relative "../config/environment"
+
+begin
+  origin = ENV.fetch("HQBASE_ORIGIN")
+  resource = "#{origin}/api/v1"
+  command = JSON.parse(ENV.fetch("PRISM_MAIL_COMMAND_JSON", '["prism-mail"]'))
+  unless command.is_a?(Array) && command.any? && command.all? { |part| part.is_a?(String) && !part.empty? }
+    raise PrismHub::ConfigurationError.new(
+      "hub.mail.command.invalid",
+      "PRISM_MAIL_COMMAND_JSON must be a non-empty JSON string array"
+    )
+  end
+
+  timeout_seconds = Float(ENV.fetch("PRISM_MAIL_TIMEOUT_SECONDS", "30"))
+  unless timeout_seconds.positive?
+    raise PrismHub::ConfigurationError.new(
+      "hub.mail.timeout.invalid",
+      "PRISM_MAIL_TIMEOUT_SECONDS must be a positive number"
+    )
+  end
+
+  cipher = PrismHub::Adapters::ProviderTokenCipher.new(key_base64: ENV.fetch("PRISM_HUB_PROVIDER_TOKEN"))
+  repository = PrismHub::Adapters::ActiveRecordMailCredentialRepository.new(cipher: cipher)
+  gateway = PrismHub::Adapters::SubprocessMailExecutionGateway.new(
+    command: command,
+    origin: origin,
+    logger: Logger.new($stderr),
+    timeout_seconds: timeout_seconds
+  )
+  generate = PrismHub::UseCases::GenerateMailDigest.new(
+    credential_repository: repository,
+    execution_gateway: gateway,
+    provider: "hqbase",
+    origin: origin,
+    resource: resource
+  )
+
+  exit PrismHub::Interfaces::Cli::RunMailDigest.new(generate_mail_digest: generate).call(
+    mailbox_id: ENV.fetch("PRISM_MAIL_MAILBOX_ID"),
+    since: ENV.fetch("PRISM_MAIL_SINCE"),
+    before: ENV.fetch("PRISM_MAIL_BEFORE")
+  )
+rescue JSON::ParserError
+  warn(JSON.generate(error: {code: "hub.mail.command.invalid_json"}))
+  exit 1
+rescue ArgumentError
+  warn(JSON.generate(error: {code: "hub.mail.timeout.invalid"}))
+  exit 1
+rescue KeyError => error
+  warn(JSON.generate(error: {code: "hub.configuration.missing", key: error.key}))
+  exit 1
+rescue PrismHub::Error => error
+  warn(JSON.generate(error: {code: error.code}))
+  exit 1
+end
