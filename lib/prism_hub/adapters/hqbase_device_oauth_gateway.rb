@@ -269,7 +269,7 @@ module PrismHub
           raise ArgumentError
         end
 
-        "https://#{uri.host}#{uri.port == 443 ? "" : ":#{uri.port}}"
+        "https://#{uri.host}#{uri.port == 443 ? "" : ":#{uri.port}"}"
       rescue URI::InvalidURIError, ArgumentError
         raise ConfigurationError.new(
           "hub.mail.hqbase_origin.invalid",
