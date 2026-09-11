@@ -5,6 +5,7 @@ module PrismHub
   module Adapters
     class HqbaseDeviceOauthGateway < Ports::MailOauthGateway
       DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code".freeze
+      REFRESH_GRANT = "refresh_token".freeze
       SCOPES = %w[mail:read offline_access].freeze
       CLIENT_NAME = "Prism Hub".freeze
       MAX_RESPONSE_BYTES = 512 * 1024
@@ -22,6 +23,7 @@ module PrismHub
         :interval
       )
       Poll = Data.define(:status, :access_token, :refresh_token, :scope, :token_type, :expires_in, :error)
+      Refresh = Data.define(:status, :access_token, :refresh_token, :scope, :token_type, :expires_in, :error)
 
       def initialize(origin:, transport: nil)
         @origin = normalized_origin(origin)
@@ -92,6 +94,40 @@ module PrismHub
         )
       end
 
+      def refresh(client_id:, refresh_token:)
+        response = form_post(
+          "/api/auth/oauth2/token",
+          "client_id" => String(client_id),
+          "grant_type" => REFRESH_GRANT,
+          "refresh_token" => String(refresh_token),
+          "resource" => resource
+        )
+        payload = json(response)
+
+        if response.status == 200
+          return Refresh.new(
+            status: :refreshed,
+            access_token: required_string(payload, "access_token"),
+            refresh_token: required_string(payload, "refresh_token"),
+            scope: required_string(payload, "scope").split,
+            token_type: required_string(payload, "token_type"),
+            expires_in: positive_integer(payload, "expires_in"),
+            error: nil
+          )
+        end
+
+        error = String(payload["error"] || "oauth_error")
+        Refresh.new(
+          status: error == "invalid_grant" ? :invalid_grant : :failed,
+          access_token: nil,
+          refresh_token: nil,
+          scope: [],
+          token_type: nil,
+          expires_in: nil,
+          error: error
+        )
+      end
+
       private
 
       Response = Data.define(:status, :body)
@@ -102,7 +138,7 @@ module PrismHub
           {
             "application_type" => "native",
             "client_name" => CLIENT_NAME,
-            "grant_types" => [DEVICE_GRANT, "refresh_token"],
+            "grant_types" => [DEVICE_GRANT, REFRESH_GRANT],
             "resources" => [resource],
             "scope" => SCOPES.join(" "),
             "token_endpoint_auth_method" => "none"
@@ -233,7 +269,7 @@ module PrismHub
           raise ArgumentError
         end
 
-        "https://#{uri.host}#{uri.port == 443 ? "" : ":#{uri.port}"}"
+        "https://#{uri.host}#{uri.port == 443 ? "" : ":#{uri.port}}"
       rescue URI::InvalidURIError, ArgumentError
         raise ConfigurationError.new(
           "hub.mail.hqbase_origin.invalid",
