@@ -54,7 +54,11 @@
 - AES-256-GCM authenticated encryption for persisted HQBase access and refresh tokens,
   with the encryption key supplied only through server secret configuration;
 - server-side HQBase credential resolution for Prism Mail digest execution, with
-  `mail:read`, token type and expiry checks before the bounded worker process starts;
+  `mail:read` and token-type checks before the bounded worker process starts;
+- automatic HQBase access/refresh-token rotation through the persisted public OAuth
+  client identity when an access token is expired or within 60 seconds of expiry;
+- fail-closed reconnect semantics for legacy credentials without a persisted OAuth
+  client identity and for refresh-token families rejected with `invalid_grant`;
 - operator-run Prism Mail digest execution that never accepts or prints raw provider
   tokens and canonicalizes the requested window before crossing the worker boundary;
 - OpenAPI 3.1 contract with required `401`/`403` protected-endpoint semantics and deterministic repository checks.
@@ -66,7 +70,7 @@
 - public/admin social-account provisioning, discovery, role-change, regrant, ownership-transfer, or access-revocation operations;
 - a public/admin HTTP surface for identity, service-principal, credential provisioning, HQBase OAuth connection, or mail digest execution;
 - an explicit grant-update use case;
-- automatic OAuth access-token refresh, provider-token revocation, or credential rotation;
+- provider-side OAuth credential revocation;
 - unattended mail scheduling or delivery;
 - binding persisted social accounts to provider credentials and concrete publishing channels;
 - database-backed channel configuration, drafts, jobs, scheduling, approvals, audit history, or durable publication idempotency;
@@ -77,8 +81,8 @@
 
 ## Next executable increments
 
-1. Add HQBase refresh-token rotation before scheduling unattended digest runs.
-2. Add controlled scheduling and delivery around the mail digest use case.
+1. Add controlled scheduling and delivery around the mail digest use case.
+2. Add explicit provider-token revocation and reconnect lifecycle operations.
 3. Add focused social-account repository/use-case operations without coupling account identity to provider credentials.
 4. Add Meta OAuth authorization behind the same encrypted provider-credential boundary.
 5. Bind authorized social accounts to server-side channels and credential references without exposing raw provider tokens to clients.
