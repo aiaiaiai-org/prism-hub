@@ -76,7 +76,7 @@ class ConnectHqbaseMailTest < Minitest::Test
   private
 
   def start_authorization
-    PrismHub::Adapters::HqbaseDeviceOAuthGateway::Start.new(
+    PrismHub::Adapters::HqbaseDeviceOauthGateway::Start.new(
       client_id: "client-prism",
       device_code: "device-secret",
       user_code: "ABCD-EFGH",
@@ -88,7 +88,7 @@ class ConnectHqbaseMailTest < Minitest::Test
   end
 
   def pending_result(error: "authorization_pending")
-    PrismHub::Adapters::HqbaseDeviceOAuthGateway::Poll.new(
+    PrismHub::Adapters::HqbaseDeviceOauthGateway::Poll.new(
       status: :pending,
       access_token: nil,
       refresh_token: nil,
@@ -100,7 +100,7 @@ class ConnectHqbaseMailTest < Minitest::Test
   end
 
   def connected_result
-    PrismHub::Adapters::HqbaseDeviceOAuthGateway::Poll.new(
+    PrismHub::Adapters::HqbaseDeviceOauthGateway::Poll.new(
       status: :connected,
       access_token: "hqb_access_secret",
       refresh_token: "hqb_refresh_secret",
