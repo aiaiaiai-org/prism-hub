@@ -165,6 +165,36 @@ CREATE TABLE public.client_credentials (
 
 
 --
+-- Name: mail_provider_credentials; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.mail_provider_credentials (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    provider character varying(64) NOT NULL,
+    origin character varying(2048) NOT NULL,
+    resource character varying(2048) NOT NULL,
+    access_token_ciphertext text NOT NULL,
+    refresh_token_ciphertext text,
+    scope text NOT NULL,
+    token_type character varying(32) NOT NULL,
+    expires_at timestamp(6) without time zone,
+    status character varying(32) DEFAULT 'active'::character varying NOT NULL,
+    revoked_at timestamp(6) without time zone,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL,
+    CONSTRAINT mail_provider_credentials_access_token_check CHECK ((char_length(access_token_ciphertext) > 0)),
+    CONSTRAINT mail_provider_credentials_origin_check CHECK (((origin)::text ~ '^https://[^/]+$'::text)),
+    CONSTRAINT mail_provider_credentials_provider_check CHECK (((provider)::text ~ '^[a-z][a-z0-9._-]{0,63}$'::text)),
+    CONSTRAINT mail_provider_credentials_refresh_token_check CHECK (((refresh_token_ciphertext IS NULL) OR (char_length(refresh_token_ciphertext) > 0))),
+    CONSTRAINT mail_provider_credentials_resource_check CHECK (((resource)::text ~ '^https://[^/]+/api/v[0-9]+$'::text)),
+    CONSTRAINT mail_provider_credentials_scope_check CHECK ((char_length(scope) > 0)),
+    CONSTRAINT mail_provider_credentials_state_check CHECK (((((status)::text = 'active'::text) AND (revoked_at IS NULL)) OR (((status)::text = 'revoked'::text) AND (revoked_at IS NOT NULL)))),
+    CONSTRAINT mail_provider_credentials_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'revoked'::character varying])::text[]))),
+    CONSTRAINT mail_provider_credentials_token_type_check CHECK ((char_length((token_type)::text) > 0))
+);
+
+
+--
 -- Name: provider_identity_bindings; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -349,6 +379,14 @@ ALTER TABLE ONLY public.client_credentials
 
 
 --
+-- Name: mail_provider_credentials mail_provider_credentials_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.mail_provider_credentials
+    ADD CONSTRAINT mail_provider_credentials_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: provider_identity_bindings provider_identity_bindings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -424,6 +462,13 @@ CREATE INDEX idx_bot_instance_events_instance_time ON public.bot_instance_lifecy
 --
 
 CREATE UNIQUE INDEX idx_bot_instances_principal_workspace ON public.bot_instances USING btree (service_principal_id, workspace_id);
+
+
+--
+-- Name: idx_mail_provider_credentials_identity; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_mail_provider_credentials_identity ON public.mail_provider_credentials USING btree (provider, origin, resource);
 
 
 --
@@ -712,6 +757,7 @@ ALTER TABLE ONLY public.social_account_accesses
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260911183000'),
 ('20260909120000'),
 ('20260828050000'),
 ('20260828030000'),

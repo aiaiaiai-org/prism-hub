@@ -61,6 +61,10 @@ module PrismHub
           inverse_of: :channel_grants
       end
 
+      class MailProviderCredential < ::ActiveRecord::Base
+        self.table_name = "mail_provider_credentials"
+      end
+
       class UserIdentity < ::ActiveRecord::Base
         self.table_name = "user_identities"
 
