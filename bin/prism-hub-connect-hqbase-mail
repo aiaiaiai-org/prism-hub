@@ -1,0 +1,18 @@
+#!/usr/bin/env ruby
+# © 2026 aiaiaiai · aiaiaiai.org
+# SPDX-License-Identifier: Apache-2.0
+
+ENV["RAILS_ENV"] ||= "production"
+require_relative "../config/environment"
+
+cipher = PrismHub::Adapters::ProviderTokenCipher.new(
+  key_base64: ENV.fetch("PRISM_HUB_PROVIDER_TOKEN_KEY_BASE64")
+)
+gateway = PrismHub::Adapters::HqbaseDeviceOAuthGateway.new(origin: ENV.fetch("HQBASE_ORIGIN"))
+repository = PrismHub::Adapters::ActiveRecordMailCredentialRepository.new(cipher: cipher)
+connection = PrismHub::UseCases::ConnectHqbaseMail.new(
+  gateway: gateway,
+  credential_repository: repository
+)
+
+exit PrismHub::Interfaces::CLI::ConnectHqbaseMail.new(connection: connection).call
