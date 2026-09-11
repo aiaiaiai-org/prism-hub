@@ -11,7 +11,7 @@ the verification URL in a browser they control and explicitly approves access.
 
 After approval, Hub stores the access and refresh tokens encrypted with
 AES-256-GCM. Tokens are never printed. The encryption key is supplied through
-`PRISM_HUB_PROVIDER_TOKEN_KEY_BASE64`, which must decode to exactly 32 random
+`PRISM_HUB_PROVIDER_TOKEN`, which must decode to exactly 32 random
 bytes and must live in the server secret store rather than source control.
 
 Run from the deployed Hub environment:
@@ -23,7 +23,7 @@ bundle exec ruby bin/prism-hub-connect-hqbase-mail
 Required server configuration:
 
 - `HQBASE_ORIGIN=https://mail.aiaiaiai.org` (or another exact HTTPS HQBase origin);
-- `PRISM_HUB_PROVIDER_TOKEN_KEY_BASE64=<strict base64 of 32 random bytes>`;
+- `PRISM_HUB_PROVIDER_TOKEN=<strict base64 of 32 random bytes>`;
 - the normal Hub `DATABASE_URL` and Rails runtime configuration.
 
 The command is an operator boundary, not a public Hub HTTP endpoint. Automatic
