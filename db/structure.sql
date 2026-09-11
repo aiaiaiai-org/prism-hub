@@ -182,14 +182,16 @@ CREATE TABLE public.mail_provider_credentials (
     revoked_at timestamp(6) without time zone,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
+    oauth_client_id character varying(255),
     CONSTRAINT mail_provider_credentials_access_token_check CHECK ((char_length(access_token_ciphertext) > 0)),
+    CONSTRAINT mail_provider_credentials_oauth_client_id_check CHECK (((oauth_client_id IS NULL) OR (char_length((oauth_client_id)::text) > 0))),
     CONSTRAINT mail_provider_credentials_origin_check CHECK (((origin)::text ~ '^https://[^/]+$'::text)),
     CONSTRAINT mail_provider_credentials_provider_check CHECK (((provider)::text ~ '^[a-z][a-z0-9._-]{0,63}$'::text)),
     CONSTRAINT mail_provider_credentials_refresh_token_check CHECK (((refresh_token_ciphertext IS NULL) OR (char_length(refresh_token_ciphertext) > 0))),
     CONSTRAINT mail_provider_credentials_resource_check CHECK (((resource)::text ~ '^https://[^/]+/api/v[0-9]+$'::text)),
     CONSTRAINT mail_provider_credentials_scope_check CHECK ((char_length(scope) > 0)),
     CONSTRAINT mail_provider_credentials_state_check CHECK (((((status)::text = 'active'::text) AND (revoked_at IS NULL)) OR (((status)::text = 'revoked'::text) AND (revoked_at IS NOT NULL)))),
-    CONSTRAINT mail_provider_credentials_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'revoked'::character varying])::text[]))),
+    CONSTRAINT mail_provider_credentials_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('revoked'::character varying)::text]))),
     CONSTRAINT mail_provider_credentials_token_type_check CHECK ((char_length((token_type)::text) > 0))
 );
 
@@ -757,6 +759,7 @@ ALTER TABLE ONLY public.social_account_accesses
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260911203000'),
 ('20260911183000'),
 ('20260909120000'),
 ('20260828050000'),
@@ -767,4 +770,3 @@ INSERT INTO "schema_migrations" (version) VALUES
 ('20260827134500'),
 ('20260827112400'),
 ('20260827094700');
-
