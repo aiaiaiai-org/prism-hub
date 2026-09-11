@@ -3,7 +3,7 @@
 
 module PrismHub
   module Ports
-    class MailOAuthGateway
+    class MailOauthGateway
       def start
         raise NotImplementedError
       end
