@@ -15,4 +15,4 @@ connection = PrismHub::UseCases::ConnectHqbaseMail.new(
   credential_repository: repository
 )
 
-exit PrismHub::Interfaces::CLI::ConnectHqbaseMail.new(connection: connection).call
+exit PrismHub::Interfaces::Cli::ConnectHqbaseMail.new(connection: connection).call
