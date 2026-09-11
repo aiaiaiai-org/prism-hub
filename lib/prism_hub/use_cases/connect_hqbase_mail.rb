@@ -42,6 +42,7 @@ module PrismHub
               provider: "hqbase",
               origin: @gateway.origin,
               resource: @gateway.resource,
+              oauth_client_id: authorization.fetch("client_id"),
               access_token: result.access_token,
               refresh_token: result.refresh_token,
               scope: result.scope,

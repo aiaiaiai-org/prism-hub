@@ -93,6 +93,55 @@ class HqbaseDeviceOauthGatewayTest < Minitest::Test
     assert_equal %w[mail:read offline_access], connected.scope
   end
 
+  def test_rotates_refresh_token_for_the_registered_public_client
+    transport = Transport.new(
+      [
+        {
+          status: 200,
+          body: JSON.generate(
+            "access_token" => "hqb_access_rotated",
+            "refresh_token" => "hqb_refresh_rotated",
+            "scope" => "mail:read offline_access",
+            "token_type" => "Bearer",
+            "expires_in" => 3600
+          )
+        }
+      ]
+    )
+    gateway = PrismHub::Adapters::HqbaseDeviceOauthGateway.new(
+      origin: "https://mail.aiaiaiai.org",
+      transport: transport
+    )
+
+    result = gateway.refresh(client_id: "client-prism", refresh_token: "hqb_refresh_old")
+
+    assert_equal :refreshed, result.status
+    assert_equal "hqb_access_rotated", result.access_token
+    assert_equal "hqb_refresh_rotated", result.refresh_token
+    request = transport.requests.fetch(0)
+    assert_equal "/api/auth/oauth2/token", request.fetch(:uri).path
+    form = URI.decode_www_form(request.fetch(:body)).to_h
+    assert_equal "client-prism", form.fetch("client_id")
+    assert_equal "refresh_token", form.fetch("grant_type")
+    assert_equal "hqb_refresh_old", form.fetch("refresh_token")
+    assert_equal "https://mail.aiaiaiai.org/api/v1", form.fetch("resource")
+  end
+
+  def test_maps_invalid_grant_without_exposing_refresh_token
+    transport = Transport.new([{status: 400, body: JSON.generate("error" => "invalid_grant")}])
+    gateway = PrismHub::Adapters::HqbaseDeviceOauthGateway.new(
+      origin: "https://mail.aiaiaiai.org",
+      transport: transport
+    )
+
+    result = gateway.refresh(client_id: "client-prism", refresh_token: "hqb_refresh_secret")
+
+    assert_equal :invalid_grant, result.status
+    assert_equal "invalid_grant", result.error
+    assert_nil result.access_token
+    assert_nil result.refresh_token
+  end
+
   def test_rejects_non_origin_configuration
     error = assert_raises(PrismHub::ConfigurationError) do
       PrismHub::Adapters::HqbaseDeviceOauthGateway.new(origin: "https://mail.aiaiaiai.org/path")

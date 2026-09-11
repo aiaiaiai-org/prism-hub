@@ -4,7 +4,7 @@
 module PrismHub
   module Ports
     class MailCredentialRepository
-      def store(provider:, origin:, resource:, access_token:, refresh_token:, scope:, token_type:, expires_at:)
+      def store(provider:, origin:, resource:, oauth_client_id:, access_token:, refresh_token:, scope:, token_type:, expires_at:)
         raise NotImplementedError
       end
 
