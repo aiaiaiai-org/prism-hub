@@ -87,6 +87,7 @@ class GenerateMailDigestsTest < Minitest::Test
     assert_equal "prism-hub.mail-digests.v1", artifact.fetch("schema_version")
     assert_equal "extractive", artifact.fetch("mode")
     assert_equal({"since" => "2026-09-11T17:00:00Z", "before" => "2026-09-11T18:00:00Z"}, artifact.fetch("window"))
+    assert_equal 20, artifact.fetch("limit")
     assert_equal 2, artifact.fetch("mailbox_count")
     assert_equal 5, artifact.fetch("matched_count")
     assert_equal 5, artifact.fetch("selected_count")
@@ -104,6 +105,20 @@ class GenerateMailDigestsTest < Minitest::Test
     assert_equal %w[mbx_one mbx_two], generator.calls.map { _1.fetch(:mailbox_id) }
     assert generator.calls.all? { _1.fetch(:since) == "2026-09-11T17:00:00Z" }
     assert generator.calls.all? { _1.fetch(:before) == "2026-09-11T18:00:00Z" }
+  end
+
+  def test_caps_the_global_timeline_without_changing_child_digest_provenance
+    artifact = build_use_case(Generator.new, limit: 3).call(
+      since: "2026-09-11T17:00:00Z",
+      before: "2026-09-11T18:00:00Z"
+    )
+
+    assert_equal 3, artifact.fetch("limit")
+    assert_equal 5, artifact.fetch("matched_count")
+    assert_equal 3, artifact.fetch("selected_count")
+    assert_equal 2, artifact.fetch("omitted_count")
+    assert_equal %w[mbx_two-0 mbx_one-1 mbx_two-1], artifact.fetch("entries").map { _1.fetch("evidence").fetch("id") }
+    assert_equal [2, 3], artifact.fetch("digests").map { _1.fetch("digest").fetch("selected_count") }
   end
 
   def test_can_select_an_explicit_subset_without_losing_discovery_authorisation
@@ -183,12 +198,18 @@ class GenerateMailDigestsTest < Minitest::Test
     assert_equal 0, mailbox_list.calls
   end
 
+  def test_rejects_limit_outside_the_supported_range
+    assert_raises(ArgumentError) { build_use_case(Generator.new, limit: 0) }
+    assert_raises(ArgumentError) { build_use_case(Generator.new, limit: 101) }
+  end
+
   private
 
-  def build_use_case(generator)
+  def build_use_case(generator, limit: 20)
     PrismHub::UseCases::GenerateMailDigests.new(
       list_mailboxes: MailboxList.new(mailboxes),
-      generate_mail_digest: generator
+      generate_mail_digest: generator,
+      limit: limit
     )
   end
 
