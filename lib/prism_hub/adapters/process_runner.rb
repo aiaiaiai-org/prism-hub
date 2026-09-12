@@ -38,7 +38,7 @@ module PrismHub
 
       def call(input)
         result = nil
-        Open3.popen3(@environment, *@command) do |stdin, stdout, stderr, wait_thread|
+        Open3.popen3(process_environment, *@command, unsetenv_others: true) do |stdin, stdout, stderr, wait_thread|
           writer = Thread.new { write_input(stdin, input) }
           stdout_reader = Thread.new { read_stream(stdout, @max_stdout_bytes) }
           stderr_reader = Thread.new { read_stream(stderr, @max_stderr_bytes) }
@@ -64,6 +64,11 @@ module PrismHub
       end
 
       private
+
+      def process_environment
+        base_environment = defined?(Bundler) ? Bundler.unbundled_env : ENV.to_h
+        base_environment.merge(@environment)
+      end
 
       def write_input(io, input)
         io.write(input)
