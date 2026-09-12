@@ -1,6 +1,5 @@
 # © 2026 aiaiaiai · aiaiaiai.org
 
-require "minitest/mock"
 require_relative "../test_helper"
 
 class ProcessRunnerTest < Minitest::Test
@@ -17,16 +16,10 @@ class ProcessRunnerTest < Minitest::Test
     refute result.timed_out
   end
 
-  def test_starts_child_from_unbundled_environment_and_keeps_explicit_worker_environment
-    original_bundle_gemfile = ENV["BUNDLE_GEMFILE"]
-    ENV["BUNDLE_GEMFILE"] = "/tmp/prism-hub-parent/Gemfile"
-
-    unbundled_environment = {
-      "PATH" => ENV.fetch("PATH"),
-      "HOME" => ENV.fetch("HOME", "/tmp")
-    }
+  def test_starts_child_without_parent_bundler_activation_and_keeps_explicit_worker_environment
     command = [RbConfig.ruby, "-e", <<~'RUBY']
-      STDOUT.write([ENV["BUNDLE_GEMFILE"], ENV["WORKER_MARKER"]].map(&:to_s).join("|"))
+      values = [ENV["BUNDLE_GEMFILE"], ENV["BUNDLE_BIN_PATH"], ENV["WORKER_MARKER"]]
+      STDOUT.write(values.map(&:to_s).join("|"))
     RUBY
     runner = PrismHub::Adapters::ProcessRunner.new(
       command: command,
@@ -34,15 +27,9 @@ class ProcessRunnerTest < Minitest::Test
       timeout_seconds: 2
     )
 
-    result = Bundler.stub(:unbundled_env, unbundled_environment) { runner.call("") }
+    result = runner.call("")
 
     assert_equal 0, result.exit_status
-    assert_equal "|worker", result.stdout
-  ensure
-    if original_bundle_gemfile
-      ENV["BUNDLE_GEMFILE"] = original_bundle_gemfile
-    else
-      ENV.delete("BUNDLE_GEMFILE")
-    end
+    assert_equal "||worker", result.stdout
   end
 end
