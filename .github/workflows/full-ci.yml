@@ -79,8 +79,17 @@ jobs:
           echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
           /usr/lib/postgresql/18/bin/pg_dump --version
 
-      - name: Check Ruby syntax
-        run: git ls-files -z '*.rb' 'bin/*' 'script/*' | xargs -0 -n1 ruby -c
+      - name: Check Ruby and shell syntax
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          while IFS= read -r -d '' path; do
+            case "$(head -n 1 "$path")" in
+              '#!/usr/bin/env bash'|'#!/bin/bash') bash -n "$path" ;;
+              *) ruby -c "$path" ;;
+            esac
+          done < <(git ls-files -z '*.rb' 'bin/*' 'script/*')
 
       - name: Check formatting and style
         run: bundle exec rubocop
