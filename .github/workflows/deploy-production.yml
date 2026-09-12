@@ -24,6 +24,7 @@ jobs:
       DEPLOY_SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
       DEPLOY_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
       DEPLOY_PORT: ${{ vars.SSH_PORT || '22' }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
       SECRET_KEY_BASE: ${{ secrets.SECRET_KEY_BASE }}
       PRISM_HUB_PROVIDER_TOKEN: ${{ secrets.PRISM_HUB_PROVIDER_TOKEN }}
       HQBASE_ORIGIN: ${{ vars.HQBASE_ORIGIN }}
@@ -110,6 +111,14 @@ jobs:
               raise SystemExit(
                   "HQBASE_ORIGIN must be an HTTPS origin without credentials, query, fragment, or path"
               )
+
+          database_url = os.environ.get("DATABASE_URL", "")
+          if database_url:
+              database = urlparse(database_url)
+              if database.scheme not in ("postgres", "postgresql"):
+                  raise SystemExit("DATABASE_URL must use postgres:// or postgresql://")
+              if not database.path or database.path == "/":
+                  raise SystemExit("DATABASE_URL must select a database")
           PY
 
       - name: Build immutable source archive
@@ -145,6 +154,8 @@ jobs:
               "PRISM_MAIL_COMMAND_JSON": os.environ["PRISM_MAIL_COMMAND_JSON"],
               "PRISM_MAIL_TIMEOUT_SECONDS": os.environ["PRISM_MAIL_TIMEOUT_SECONDS"],
           }
+          if os.environ.get("DATABASE_URL"):
+              values["DATABASE_URL"] = os.environ["DATABASE_URL"]
 
           for key, value in values.items():
               if "\x00" in value or "\n" in value or "\r" in value:
@@ -234,7 +245,11 @@ jobs:
             echo
             echo "- commit: \`${GITHUB_SHA}\`"
             echo '- environment: `production`'
-            echo '- database credential source: VPS-local `/srv/prism-hub/shared/database.env`'
+            if [[ -n "$DATABASE_URL" ]]; then
+              echo '- database source: configured `DATABASE_URL` Environment secret'
+            else
+              echo '- database source: managed VPS-local `/srv/prism-hub/shared/database.env`'
+            fi
             echo '- local health: passed'
             if [[ -n "$PRISM_HUB_PUBLIC_URL" ]]; then
               echo '- public health: passed'
