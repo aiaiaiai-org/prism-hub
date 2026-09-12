@@ -1,0 +1,185 @@
+# © 2026 aiaiaiai · aiaiaiai.org
+
+name: Bootstrap production database
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prism-hub-production-database-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    name: Bootstrap production database
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: production
+    env:
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+      SSH_PORT: ${{ vars.SSH_PORT || '22' }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+    steps:
+      - name: Check out production source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Validate bootstrap contract
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          if [[ "$GITHUB_REF" != "refs/heads/master" ]]; then
+            echo "Production database bootstrap must run from master; selected ref is ${GITHUB_REF}." >&2
+            exit 64
+          fi
+
+          for variable_name in SSH_HOST SSH_USER SSH_PRIVATE_KEY DATABASE_URL; do
+            if [[ -z "${!variable_name:-}" ]]; then
+              echo "Missing production environment value: ${variable_name}" >&2
+              exit 78
+            fi
+          done
+
+          if [[ ! "$SSH_PORT" =~ ^[0-9]+$ ]] || (( SSH_PORT < 1 || SSH_PORT > 65535 )); then
+            echo "SSH_PORT must be a valid TCP port." >&2
+            exit 78
+          fi
+
+          umask 077
+          python3 - <<'PY' >"${RUNNER_TEMP}/prism-hub-database.json"
+          import json
+          import os
+          from urllib.parse import unquote, urlparse
+
+          raw = os.environ["DATABASE_URL"]
+          uri = urlparse(raw)
+          database = unquote(uri.path.removeprefix("/"))
+          user = unquote(uri.username or "")
+          password = unquote(uri.password or "")
+          host = uri.hostname or ""
+          port = str(uri.port or 5432)
+
+          if uri.scheme not in ("postgres", "postgresql"):
+              raise SystemExit("DATABASE_URL must use postgres:// or postgresql://")
+          if host not in ("127.0.0.1", "localhost", "::1"):
+              raise SystemExit("DATABASE_URL must target PostgreSQL on the Prism Hub VPS")
+          if user != "prism_hub":
+              raise SystemExit("DATABASE_URL user must be prism_hub")
+          if database != "prism_hub_production":
+              raise SystemExit("DATABASE_URL database must be prism_hub_production")
+          if not password:
+              raise SystemExit("DATABASE_URL must contain a password")
+          if uri.query or uri.fragment:
+              raise SystemExit("DATABASE_URL must not contain query or fragment parameters")
+
+          values = {
+              "host": host,
+              "port": port,
+              "user": user,
+              "password": password,
+              "database": database,
+          }
+          for key, value in values.items():
+              if "\x00" in value or "\n" in value or "\r" in value:
+                  raise SystemExit(f"DATABASE_URL {key} must be single-line")
+
+          print(json.dumps(values))
+          PY
+
+      - name: Configure bootstrap SSH trust
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          install -m 0700 -d "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" >"$HOME/.ssh/id_prism_hub"
+          chmod 0600 "$HOME/.ssh/id_prism_hub"
+
+          if [[ -n "$SSH_KNOWN_HOSTS" ]]; then
+            printf '%s\n' "$SSH_KNOWN_HOSTS" >"$HOME/.ssh/known_hosts"
+          else
+            ssh-keyscan -T 10 -p "$SSH_PORT" -H "$SSH_HOST" >"$HOME/.ssh/known_hosts"
+          fi
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          test -s "$HOME/.ssh/known_hosts"
+
+          {
+            echo '### SSH host identity used for bootstrap'
+            echo
+            echo 'If `SSH_KNOWN_HOSTS` was not already configured, verify these fingerprints against the VPS console before pinning the scanned entries as that secret:'
+            echo
+            echo '```text'
+            ssh-keygen -lf "$HOME/.ssh/known_hosts"
+            echo '```'
+            echo
+            echo '<details><summary>known_hosts entries</summary>'
+            echo
+            echo '```text'
+            cat "$HOME/.ssh/known_hosts"
+            echo '```'
+            echo '</details>'
+          } >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Bootstrap PostgreSQL role and database
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          ssh_options=(
+            -i "$HOME/.ssh/id_prism_hub"
+            -o BatchMode=yes
+            -o IdentitiesOnly=yes
+            -o StrictHostKeyChecking=yes
+            -p "$SSH_PORT"
+          )
+          scp_options=(
+            -i "$HOME/.ssh/id_prism_hub"
+            -o BatchMode=yes
+            -o IdentitiesOnly=yes
+            -o StrictHostKeyChecking=yes
+            -P "$SSH_PORT"
+          )
+          remote_prefix="/tmp/prism-hub-db-bootstrap-${GITHUB_RUN_ID}"
+
+          scp "${scp_options[@]}" \
+            script/bootstrap-production-database \
+            "$SSH_USER@$SSH_HOST:${remote_prefix}.sh"
+          scp "${scp_options[@]}" \
+            "${RUNNER_TEMP}/prism-hub-database.json" \
+            "$SSH_USER@$SSH_HOST:${remote_prefix}.json"
+
+          ssh "${ssh_options[@]}" "$SSH_USER@$SSH_HOST" \
+            "chmod 700 '${remote_prefix}.sh' && chmod 600 '${remote_prefix}.json' && '${remote_prefix}.sh' '${remote_prefix}.json'; status=\$?; rm -f '${remote_prefix}.sh' '${remote_prefix}.json'; exit \$status"
+
+      - name: Record bootstrap result
+        shell: bash
+        run: |
+          {
+            echo
+            echo '### Prism Hub production database'
+            echo
+            echo '- role: `prism_hub`'
+            echo '- database: `prism_hub_production`'
+            echo '- host: local VPS PostgreSQL only'
+            echo '- password source: existing `DATABASE_URL` Environment secret'
+            echo '- connection verification: passed'
+          } >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Remove transient secrets
+        if: always()
+        shell: bash
+        run: |
+          rm -f \
+            "$HOME/.ssh/id_prism_hub" \
+            "$HOME/.ssh/known_hosts" \
+            "${RUNNER_TEMP}/prism-hub-database.json"
