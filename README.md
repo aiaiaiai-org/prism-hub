@@ -15,14 +15,16 @@ control plane exists. It currently provides:
 - multi-target publication requests whose provider, channel, and credential
   bindings stay server-side;
 - an injected Prism execution port with a hardened local-process adapter;
+- HQBase Mail device OAuth, encrypted credential persistence, automatic access/
+  refresh-token rotation, and Prism Mail digest execution;
 - explicit Clean Architecture boundaries and framework-independent tests;
 - an OpenAPI 3.1 contract intended for generated clients such as `prism-bot`.
 
-OAuth flows, social-account provisioning and access-management APIs, scheduling,
-publication persistence, approvals, audit history, and production packaging
-remain later increments. The current Prism runtime also needs a production
-composition root before this foundation can publish through the live Threads
-adapter; Instagram publishing is not implemented in `prism` yet.
+Social-account provisioning and access-management APIs, scheduling, publication
+persistence, approvals, and audit history remain later increments. Production
+activation is available through an explicit manual workflow; the configured
+`prism-runtime` and `prism-mail` executables remain independent runtime
+dependencies of the Hub process.
 
 ## Dependency boundary
 
@@ -97,6 +99,16 @@ Channel discovery accepts `limit` (1–100, default 50) and an opaque `cursor`.
 Every HTTP response carries `X-Request-ID`; typed HTTP error bodies repeat the
 same value as `request_id` for support correlation. Channel capabilities are
 declarative configuration and must match the active Prism provider adapter.
+
+## Production deployment
+
+Production deployment is manual by design. Repository-side deployability is
+checked by `Validate deploy`; activation is performed by `Deploy production`
+from `master` through the GitHub `production` Environment.
+
+The exact Environment secret/variable contract, VPS prerequisites, atomic
+release layout, health checks, and rollback behavior are documented in
+[`docs/deployment.md`](docs/deployment.md).
 
 ## Verification
 
