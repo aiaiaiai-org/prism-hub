@@ -1,5 +1,6 @@
 # © 2026 aiaiaiai · aiaiaiai.org
 
+require "minitest/mock"
 require_relative "../test_helper"
 
 class ProcessRunnerTest < Minitest::Test
