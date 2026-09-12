@@ -63,6 +63,7 @@ jobs:
             'secrets.SSH_USER',
             'secrets.SSH_PRIVATE_KEY',
             'secrets.SSH_KNOWN_HOSTS',
+            'secrets.DATABASE_URL',
             'PRISM_HUB_PROVIDER_TOKEN',
             'HQBASE_ORIGIN',
             'SECRET_KEY_BASE',
@@ -72,7 +73,6 @@ jobs:
           abort "deploy workflow is missing: #{missing.join(', ')}" unless missing.empty?
           abort 'deploy workflow must not deploy on push' if deploy.match?(/^\s+push:\s*$/)
           abort 'deploy workflow must not disable SSH host verification' if deploy.include?('StrictHostKeyChecking=no')
-          abort 'deploy workflow must not import DATABASE_URL from GitHub secrets' if deploy.include?('secrets.DATABASE_URL')
 
           bootstrap_fragments = [
             'workflow_dispatch:',
@@ -80,21 +80,22 @@ jobs:
             'secrets.SSH_HOST',
             'secrets.SSH_USER',
             'secrets.SSH_PRIVATE_KEY',
+            'secrets.DATABASE_URL',
             'script/bootstrap-production-database',
-            'password: generated and retained only on the VPS'
+            'source: configured `DATABASE_URL` Environment secret',
+            'source: managed VPS-local fallback'
           ]
           missing = bootstrap_fragments.reject { |fragment| bootstrap.include?(fragment) }
           abort "database bootstrap workflow is missing: #{missing.join(', ')}" unless missing.empty?
           abort 'database bootstrap must not run on push' if bootstrap.match?(/^\s+push:\s*$/)
           abort 'database bootstrap must not disable SSH host verification' if bootstrap.include?('StrictHostKeyChecking=no')
-          abort 'database bootstrap must not import DATABASE_URL from GitHub secrets' if bootstrap.include?('secrets.DATABASE_URL')
 
           script_fragments = {
             'deploy script' => [
               'shared_root="${app_root}/shared"',
+              'incoming_has_database',
               'database.env',
-              'DATABASE_URL must remain VPS-local',
-              'run Bootstrap production database first'
+              'DATABASE_URL is not configured and managed VPS database credentials are missing'
             ],
             'database bootstrap script' => [
               'openssl rand -hex 32',
