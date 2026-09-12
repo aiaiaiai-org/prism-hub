@@ -1,0 +1,219 @@
+# © 2026 aiaiaiai · aiaiaiai.org
+
+name: Deploy production
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prism-hub-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: production
+    env:
+      DEPLOY_HOST: ${{ secrets.PRISM_HUB_DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.PRISM_HUB_DEPLOY_USER }}
+      DEPLOY_SSH_KEY: ${{ secrets.PRISM_HUB_DEPLOY_SSH_KEY }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.PRISM_HUB_DEPLOY_KNOWN_HOSTS }}
+      DEPLOY_PORT: ${{ vars.PRISM_HUB_DEPLOY_PORT || '22' }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SECRET_KEY_BASE: ${{ secrets.SECRET_KEY_BASE }}
+      PRISM_HUB_PROVIDER_TOKEN: ${{ secrets.PRISM_HUB_PROVIDER_TOKEN }}
+      HQBASE_ORIGIN: ${{ vars.HQBASE_ORIGIN }}
+      PRISM_HUB_CHANNELS_JSON: ${{ vars.PRISM_HUB_CHANNELS_JSON || '[]' }}
+      PRISM_RUNTIME_COMMAND_JSON: ${{ vars.PRISM_RUNTIME_COMMAND_JSON || '["prism-runtime","--json"]' }}
+      PRISM_RUNTIME_TIMEOUT_SECONDS: ${{ vars.PRISM_RUNTIME_TIMEOUT_SECONDS || '10' }}
+      PRISM_MAIL_COMMAND_JSON: ${{ vars.PRISM_MAIL_COMMAND_JSON || '["prism-mail"]' }}
+      PRISM_MAIL_TIMEOUT_SECONDS: ${{ vars.PRISM_MAIL_TIMEOUT_SECONDS || '30' }}
+      PRISM_HUB_PUBLIC_URL: ${{ vars.PRISM_HUB_PUBLIC_URL }}
+
+    steps:
+      - name: Check out production source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Validate deployment contract
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          if [[ "$GITHUB_REF" != "refs/heads/master" ]]; then
+            echo "Production deployments must run from master; selected ref is ${GITHUB_REF}." >&2
+            exit 64
+          fi
+
+          required=(
+            DEPLOY_HOST
+            DEPLOY_USER
+            DEPLOY_SSH_KEY
+            DEPLOY_KNOWN_HOSTS
+            DATABASE_URL
+            SECRET_KEY_BASE
+            PRISM_HUB_PROVIDER_TOKEN
+            HQBASE_ORIGIN
+          )
+
+          missing=()
+          for variable_name in "${required[@]}"; do
+            if [[ -z "${!variable_name:-}" ]]; then
+              missing+=("$variable_name")
+            fi
+          done
+
+          if (( ${#missing[@]} > 0 )); then
+            printf 'Missing production environment values: %s\n' "${missing[*]}" >&2
+            exit 78
+          fi
+
+          if [[ ! "$DEPLOY_PORT" =~ ^[0-9]+$ ]] || (( DEPLOY_PORT < 1 || DEPLOY_PORT > 65535 )); then
+            echo "PRISM_HUB_DEPLOY_PORT must be a valid TCP port." >&2
+            exit 78
+          fi
+
+          ruby -ruri -e '
+            uri = URI.parse(ENV.fetch("HQBASE_ORIGIN"))
+            valid_path = uri.path.nil? || uri.path.empty? || uri.path == "/"
+            abort "HQBASE_ORIGIN must be an HTTPS origin without credentials, query, fragment, or path" unless
+              uri.is_a?(URI::HTTPS) && uri.host && !uri.userinfo && !uri.query && !uri.fragment && valid_path
+          '
+
+      - name: Build immutable source archive
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git archive \
+            --format=tar.gz \
+            --output="${RUNNER_TEMP}/prism-hub-${GITHUB_SHA}.tar.gz" \
+            HEAD
+
+      - name: Build production environment file
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+
+          python3 - <<'PY' >"${RUNNER_TEMP}/prism-hub-production.env"
+          import os
+
+          values = {
+              "RAILS_ENV": "production",
+              "RAILS_FORCE_SSL": "true",
+              "RAILS_LOG_LEVEL": "info",
+              "PORT": "3000",
+              "DATABASE_URL": os.environ["DATABASE_URL"],
+              "SECRET_KEY_BASE": os.environ["SECRET_KEY_BASE"],
+              "PRISM_HUB_LEGACY_TOKEN_ENABLED": "false",
+              "PRISM_HUB_CHANNELS_JSON": os.environ["PRISM_HUB_CHANNELS_JSON"],
+              "PRISM_RUNTIME_COMMAND_JSON": os.environ["PRISM_RUNTIME_COMMAND_JSON"],
+              "PRISM_RUNTIME_TIMEOUT_SECONDS": os.environ["PRISM_RUNTIME_TIMEOUT_SECONDS"],
+              "HQBASE_ORIGIN": os.environ["HQBASE_ORIGIN"],
+              "PRISM_HUB_PROVIDER_TOKEN": os.environ["PRISM_HUB_PROVIDER_TOKEN"],
+              "PRISM_MAIL_COMMAND_JSON": os.environ["PRISM_MAIL_COMMAND_JSON"],
+              "PRISM_MAIL_TIMEOUT_SECONDS": os.environ["PRISM_MAIL_TIMEOUT_SECONDS"],
+          }
+
+          for key, value in values.items():
+              if "\x00" in value or "\n" in value or "\r" in value:
+                  raise SystemExit(f"{key} must be a single-line environment value")
+              escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+              print(f'{key}="{escaped}"')
+          PY
+
+      - name: Configure verified SSH transport
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          mkdir -p "${HOME}/.ssh"
+          printf '%s\n' "$DEPLOY_SSH_KEY" >"${HOME}/.ssh/id_prism_hub"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" >"${HOME}/.ssh/known_hosts"
+          chmod 600 "${HOME}/.ssh/id_prism_hub" "${HOME}/.ssh/known_hosts"
+
+      - name: Transfer release inputs
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh_options=(
+            -i "${HOME}/.ssh/id_prism_hub"
+            -o BatchMode=yes
+            -o IdentitiesOnly=yes
+            -o StrictHostKeyChecking=yes
+            -p "$DEPLOY_PORT"
+          )
+          scp_options=(
+            -i "${HOME}/.ssh/id_prism_hub"
+            -o BatchMode=yes
+            -o IdentitiesOnly=yes
+            -o StrictHostKeyChecking=yes
+            -P "$DEPLOY_PORT"
+          )
+
+          remote_prefix="/tmp/prism-hub-${GITHUB_SHA}"
+          ssh "${ssh_options[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "rm -f '${remote_prefix}.tar.gz' '${remote_prefix}.env' '${remote_prefix}.deploy'"
+          scp "${scp_options[@]}" \
+            "${RUNNER_TEMP}/prism-hub-${GITHUB_SHA}.tar.gz" \
+            "${DEPLOY_USER}@${DEPLOY_HOST}:${remote_prefix}.tar.gz"
+          scp "${scp_options[@]}" \
+            "${RUNNER_TEMP}/prism-hub-production.env" \
+            "${DEPLOY_USER}@${DEPLOY_HOST}:${remote_prefix}.env"
+          scp "${scp_options[@]}" \
+            script/deploy-production \
+            "${DEPLOY_USER}@${DEPLOY_HOST}:${remote_prefix}.deploy"
+
+      - name: Activate release
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh_options=(
+            -i "${HOME}/.ssh/id_prism_hub"
+            -o BatchMode=yes
+            -o IdentitiesOnly=yes
+            -o StrictHostKeyChecking=yes
+            -p "$DEPLOY_PORT"
+          )
+          remote_prefix="/tmp/prism-hub-${GITHUB_SHA}"
+
+          ssh "${ssh_options[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "chmod 700 '${remote_prefix}.deploy' && '${remote_prefix}.deploy' '${GITHUB_SHA}' '${remote_prefix}.tar.gz' '${remote_prefix}.env'; status=\$?; rm -f '${remote_prefix}.deploy' '${remote_prefix}.tar.gz' '${remote_prefix}.env'; exit \$status"
+
+      - name: Verify public health
+        if: ${{ env.PRISM_HUB_PUBLIC_URL != '' }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          base_url="${PRISM_HUB_PUBLIC_URL%/}"
+          curl \
+            --fail \
+            --silent \
+            --show-error \
+            --max-time 10 \
+            --retry 5 \
+            --retry-delay 2 \
+            "${base_url}/healthz" >/dev/null
+
+      - name: Record deployment summary
+        shell: bash
+        run: |
+          {
+            echo '### Prism Hub production deployment'
+            echo
+            echo "- commit: \`${GITHUB_SHA}\`"
+            echo '- environment: `production`'
+            echo '- local health: passed'
+            if [[ -n "$PRISM_HUB_PUBLIC_URL" ]]; then
+              echo '- public health: passed'
+            else
+              echo '- public health: skipped (`PRISM_HUB_PUBLIC_URL` is not configured)'
+            fi
+          } >>"$GITHUB_STEP_SUMMARY"
