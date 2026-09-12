@@ -1,0 +1,84 @@
+# © 2026 aiaiaiai · aiaiaiai.org
+
+name: Validate deploy
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/deploy-production.yml'
+      - '.github/workflows/validate-deploy.yml'
+      - '.github/workflows/full-ci.yml'
+      - 'script/deploy-production'
+      - 'config/database.yml'
+      - 'config/environments/production.rb'
+      - 'config/puma.rb'
+      - 'Gemfile'
+      - 'Gemfile.lock'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-deploy-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  production:
+    name: Production deploy contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Validate deployment script syntax
+        shell: bash
+        run: bash -n script/deploy-production
+
+      - name: Validate workflow contract
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          ruby <<'RUBY'
+          deploy = File.read('.github/workflows/deploy-production.yml')
+
+          required_fragments = [
+            'workflow_dispatch:',
+            'environment: production',
+            'contents: read',
+            'StrictHostKeyChecking=yes',
+            'PRISM_HUB_DEPLOY_KNOWN_HOSTS',
+            'PRISM_HUB_PROVIDER_TOKEN',
+            'HQBASE_ORIGIN',
+            'DATABASE_URL',
+            'SECRET_KEY_BASE',
+            'script/deploy-production'
+          ]
+
+          missing = required_fragments.reject { |fragment| deploy.include?(fragment) }
+          abort "deploy workflow is missing: #{missing.join(', ')}" unless missing.empty?
+          abort 'deploy workflow must not deploy on push' if deploy.match?(/^\s+push:\s*$/)
+          abort 'deploy workflow must not disable SSH host verification' if deploy.include?('StrictHostKeyChecking=no')
+          RUBY
+
+      - name: Validate immutable archive contract
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          archive="${RUNNER_TEMP}/prism-hub-validate.tar.gz"
+          git archive --format=tar.gz --output="$archive" HEAD
+          tar -tzf "$archive" | grep -Fx 'script/deploy-production' >/dev/null
+
+      - name: Validate production runtime configuration
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          grep -F 'url: <%= ENV["DATABASE_URL"] %>' config/database.yml >/dev/null
+          grep -F 'port ENV.fetch("PORT", 3000)' config/puma.rb >/dev/null
+          grep -F 'config.force_ssl = ENV.fetch("RAILS_FORCE_SSL", "true") == "true"' \
+            config/environments/production.rb >/dev/null
