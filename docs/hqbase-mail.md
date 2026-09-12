@@ -20,12 +20,20 @@ Connect from the deployed Hub environment:
 bundle exec ruby bin/prism-hub-connect-hqbase-mail
 ```
 
-Once connected, Hub can execute a Prism Mail digest without accepting or exposing
-an access token at the command boundary. It resolves and decrypts the active HQBase
-credential server-side, verifies `mail:read`, and rotates the access/refresh token
-pair through the original public OAuth client when the access token is expired or
-within 60 seconds of expiry. The rotated pair replaces the old encrypted credential
-before the bounded Prism Mail worker starts.
+Once connected, Hub can discover every mailbox visible to the credential. This is
+the supported way to map human-readable addresses to provider mailbox identifiers;
+operators do not need ad-hoc Rails scripts or token-bearing curl commands.
+
+```sh
+bundle exec ruby bin/prism-hub-list-mailboxes
+```
+
+Mailbox discovery uses `GET /api/v1/mailboxes` with the same `mail:read` OAuth
+credential. Unknown additive HQBase fields are ignored. The output schema is
+`prism-hub.mailboxes.v1` and includes only the mailbox identity and access metadata
+needed for selection; OAuth tokens are never emitted.
+
+Hub can execute Prism Mail for one mailbox by setting its provider identifier:
 
 ```sh
 PRISM_MAIL_MAILBOX_ID=<mailbox-id> \
@@ -34,7 +42,29 @@ PRISM_MAIL_BEFORE=2026-09-11T00:00:00Z \
   bundle exec ruby bin/prism-hub-run-mail-digest
 ```
 
-The digest artifact is written to stdout. Treat it as sensitive because extractive
+`PRISM_MAIL_MAILBOX_ID` is optional. When it is omitted, Hub discovers the visible
+mailboxes and executes the deterministic single-mailbox Prism Mail worker once per
+mailbox. Hub then returns one `prism-hub.mail-digests.v1` aggregate with per-mailbox
+`prism-mail.digest.v1` artifacts and summed matched/selected/omitted counts:
+
+```sh
+PRISM_MAIL_SINCE=2026-09-10T00:00:00Z \
+PRISM_MAIL_BEFORE=2026-09-11T00:00:00Z \
+  bundle exec ruby bin/prism-hub-run-mail-digest
+```
+
+Prism Mail remains a single-mailbox deterministic adapter. Mailbox discovery,
+selection, OAuth lifecycle, and multi-mailbox orchestration belong to Prism Hub.
+This keeps HQBase provider semantics out of Prism Mail's digest contract while
+removing provider IDs from the normal all-mailboxes operator path.
+
+Before discovery or execution, Hub resolves and decrypts the active HQBase
+credential server-side, verifies `mail:read`, and rotates the access/refresh token
+pair through the original public OAuth client when the access token is expired or
+within 60 seconds of expiry. The rotated pair replaces the old encrypted credential
+before provider access or a bounded Prism Mail worker starts.
+
+Digest artifacts are written to stdout. Treat them as sensitive because extractive
 entries may contain mail excerpts. Runtime diagnostics go to stderr and never print
 provider tokens.
 
@@ -48,11 +78,12 @@ Required server configuration:
 
 Credentials created before OAuth client identifiers were persisted remain usable
 until their access token needs refresh; at that point Hub fails closed with a
-reconnect-required error instead of guessing a client identity. HQBase `invalid_grant`
-also requires reconnection unless Hub observes that another process already stored a
-newer rotated credential.
+reconnect-required error instead of guessing a client identity. HQBase
+`invalid_grant` also requires reconnection unless Hub observes that another process
+already stored a newer rotated credential.
 
-Connection and digest commands are operator boundaries, not public Hub HTTP
-endpoints. Provider revocation, scheduling and delivery remain separate increments.
+Connection, discovery, and digest commands are operator boundaries, not public Hub
+HTTP endpoints. Provider revocation, scheduling, delivery, and end-user UI remain
+separate increments.
 
 <!-- © 2026 aiaiaiai · aiaiaiai.org -->
