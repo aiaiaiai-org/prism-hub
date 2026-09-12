@@ -51,6 +51,8 @@ jobs:
           ruby <<'RUBY'
           deploy = File.read('.github/workflows/deploy-production.yml')
           bootstrap = File.read('.github/workflows/bootstrap-production-database.yml')
+          deploy_script = File.read('script/deploy-production')
+          bootstrap_script = File.read('script/bootstrap-production-database')
 
           deploy_fragments = [
             'workflow_dispatch:',
@@ -61,9 +63,9 @@ jobs:
             'secrets.SSH_USER',
             'secrets.SSH_PRIVATE_KEY',
             'secrets.SSH_KNOWN_HOSTS',
+            'secrets.DATABASE_URL',
             'PRISM_HUB_PROVIDER_TOKEN',
             'HQBASE_ORIGIN',
-            'DATABASE_URL',
             'SECRET_KEY_BASE',
             'script/deploy-production'
           ]
@@ -80,13 +82,37 @@ jobs:
             'secrets.SSH_PRIVATE_KEY',
             'secrets.DATABASE_URL',
             'script/bootstrap-production-database',
-            'prism_hub_production',
-            'prism_hub'
+            'source: configured `DATABASE_URL` Environment secret',
+            'source: managed VPS-local fallback'
           ]
           missing = bootstrap_fragments.reject { |fragment| bootstrap.include?(fragment) }
           abort "database bootstrap workflow is missing: #{missing.join(', ')}" unless missing.empty?
           abort 'database bootstrap must not run on push' if bootstrap.match?(/^\s+push:\s*$/)
           abort 'database bootstrap must not disable SSH host verification' if bootstrap.include?('StrictHostKeyChecking=no')
+
+          script_fragments = {
+            'deploy script' => [
+              'shared_root="${app_root}/shared"',
+              'incoming_has_database',
+              'database.env',
+              'DATABASE_URL is not configured and managed VPS database credentials are missing'
+            ],
+            'database bootstrap script' => [
+              'openssl rand -hex 32',
+              'prism_hub_production',
+              'prism_hub',
+              'database.env',
+              'DATABASE_URL=postgresql://'
+            ]
+          }
+          scripts = {
+            'deploy script' => deploy_script,
+            'database bootstrap script' => bootstrap_script
+          }
+          script_fragments.each do |name, fragments|
+            missing = fragments.reject { |fragment| scripts.fetch(name).include?(fragment) }
+            abort "#{name} is missing: #{missing.join(', ')}" unless missing.empty?
+          end
           RUBY
 
       - name: Validate immutable archive contract
