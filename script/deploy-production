@@ -57,23 +57,26 @@ fi
 sudo install -d -m 0755 -o "$deploy_user" -g "$deploy_group" \
   "$app_root" "$releases_root" "$shared_root"
 
-if [[ ! -f "$database_env_file" ]]; then
-  echo "production database credentials are missing; run Bootstrap production database first" >&2
-  exit 78
-fi
-if [[ "$(stat -c '%a' "$database_env_file")" != "600" ]]; then
-  echo "production database environment file must have mode 0600" >&2
-  exit 78
+incoming_has_database=false
+if grep -q '^DATABASE_URL=' "$incoming_env_path"; then
+  incoming_has_database=true
 fi
 
-database_env_line="$(cat "$database_env_file")"
-if [[ ! "$database_env_line" =~ ^DATABASE_URL=postgresql://prism_hub:[0-9a-f]{64}@127\.0\.0\.1:5432/prism_hub_production$ ]]; then
-  echo "production database environment file does not match the managed Prism Hub database contract" >&2
-  exit 78
-fi
-if grep -q '^DATABASE_URL=' "$incoming_env_path"; then
-  echo "DATABASE_URL must remain VPS-local and must not arrive from the deployment workflow" >&2
-  exit 78
+if [[ "$incoming_has_database" != "true" ]]; then
+  if [[ ! -f "$database_env_file" ]]; then
+    echo "DATABASE_URL is not configured and managed VPS database credentials are missing; run Bootstrap production database first" >&2
+    exit 78
+  fi
+  if [[ "$(stat -c '%a' "$database_env_file")" != "600" ]]; then
+    echo "production database environment file must have mode 0600" >&2
+    exit 78
+  fi
+
+  database_env_line="$(cat "$database_env_file")"
+  if [[ ! "$database_env_line" =~ ^DATABASE_URL=postgresql://prism_hub:[0-9a-f]{64}@127\.0\.0\.1:5432/prism_hub_production$ ]]; then
+    echo "production database environment file does not match the managed Prism Hub database contract" >&2
+    exit 78
+  fi
 fi
 
 combined_env="$(mktemp)"
@@ -82,7 +85,11 @@ cleanup_combined_env() {
 }
 trap cleanup_combined_env EXIT
 chmod 0600 "$combined_env"
-cat "$database_env_file" "$incoming_env_path" >"$combined_env"
+if [[ "$incoming_has_database" == "true" ]]; then
+  cat "$incoming_env_path" >"$combined_env"
+else
+  cat "$database_env_file" "$incoming_env_path" >"$combined_env"
+fi
 install -m 0600 "$combined_env" "$env_file"
 rm -f "$incoming_env_path" "$combined_env"
 trap - EXIT
