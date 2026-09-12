@@ -24,7 +24,6 @@ jobs:
       DEPLOY_SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
       DEPLOY_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
       DEPLOY_PORT: ${{ vars.SSH_PORT || '22' }}
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
       SECRET_KEY_BASE: ${{ secrets.SECRET_KEY_BASE }}
       PRISM_HUB_PROVIDER_TOKEN: ${{ secrets.PRISM_HUB_PROVIDER_TOKEN }}
       HQBASE_ORIGIN: ${{ vars.HQBASE_ORIGIN }}
@@ -57,7 +56,6 @@ jobs:
             DEPLOY_USER
             DEPLOY_SSH_KEY
             DEPLOY_KNOWN_HOSTS
-            DATABASE_URL
             SECRET_KEY_BASE
             PRISM_HUB_PROVIDER_TOKEN
             HQBASE_ORIGIN
@@ -137,7 +135,6 @@ jobs:
               "RAILS_FORCE_SSL": "true",
               "RAILS_LOG_LEVEL": "info",
               "PORT": "3000",
-              "DATABASE_URL": os.environ["DATABASE_URL"],
               "SECRET_KEY_BASE": os.environ["SECRET_KEY_BASE"],
               "PRISM_HUB_LEGACY_TOKEN_ENABLED": "false",
               "PRISM_HUB_CHANNELS_JSON": os.environ["PRISM_HUB_CHANNELS_JSON"],
@@ -237,6 +234,7 @@ jobs:
             echo
             echo "- commit: \`${GITHUB_SHA}\`"
             echo '- environment: `production`'
+            echo '- database credential source: VPS-local `/srv/prism-hub/shared/database.env`'
             echo '- local health: passed'
             if [[ -n "$PRISM_HUB_PUBLIC_URL" ]]; then
               echo '- public health: passed'
