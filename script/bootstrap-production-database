@@ -20,7 +20,7 @@ if ! sudo -n true >/dev/null 2>&1; then
   exit 77
 fi
 
-if ! sudo -u postgres psql --no-psqlrc --dbname=postgres --tuples-only --command='SELECT 1' >/dev/null; then
+if ! sudo -n -u postgres psql --no-psqlrc --dbname=postgres --tuples-only --command='SELECT 1' >/dev/null; then
   echo "local PostgreSQL is unavailable or the postgres system role cannot connect" >&2
   exit 69
 fi
@@ -84,11 +84,11 @@ REVOKE ALL ON DATABASE prism_hub_production FROM PUBLIC;
 GRANT CONNECT, TEMPORARY ON DATABASE prism_hub_production TO prism_hub;
 SQL
 
-sudo -u postgres psql \
+sudo -n -u postgres psql \
   --no-psqlrc \
   --set=ON_ERROR_STOP=1 \
   --dbname=postgres \
-  --file="$sql_file" \
+  <"$sql_file" \
   >/dev/null
 
 PGPASSWORD="$db_password" psql \
