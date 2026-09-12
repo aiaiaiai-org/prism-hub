@@ -27,6 +27,7 @@ current_link="${app_root}/current"
 service_name="${app_name}.service"
 deploy_user="$(id -un)"
 deploy_group="$(id -gn)"
+runtime_path="$PATH"
 
 required_commands=(bundle curl ruby sudo systemctl systemd-run tar)
 for command_name in "${required_commands[@]}"; do
@@ -58,13 +59,19 @@ sudo install -d -m 0755 -o "$deploy_user" -g "$deploy_group" \
 install -m 0600 "$incoming_env_path" "$env_file"
 rm -f "$incoming_env_path"
 
-if [[ -e "$release_dir" ]]; then
-  echo "release ${release_sha} already exists" >&2
-  exit 73
+current_release=""
+if [[ -L "$current_link" ]]; then
+  current_release="$(readlink -f "$current_link")"
 fi
 
-mkdir -m 0755 "$release_dir"
-tar -xzf "$archive_path" -C "$release_dir"
+if [[ -d "$release_dir" && "$current_release" != "$release_dir" ]]; then
+  rm -rf -- "$release_dir"
+fi
+
+if [[ ! -d "$release_dir" ]]; then
+  mkdir -m 0755 "$release_dir"
+  tar -xzf "$archive_path" -C "$release_dir"
+fi
 rm -f "$archive_path"
 
 bundle_bin="$(command -v bundle)"
@@ -93,15 +100,13 @@ run_with_runtime_env() {
     --setenv="BUNDLE_DEPLOYMENT=true" \
     --setenv="BUNDLE_PATH=${shared_root}/bundle" \
     --setenv="BUNDLE_WITHOUT=development:test" \
+    --setenv="PATH=${runtime_path}" \
     -- "$@"
 }
 
 run_with_runtime_env "$release_dir" "$bundle_bin" exec rails db:migrate
 
-previous_release=""
-if [[ -L "$current_link" ]]; then
-  previous_release="$(readlink -f "$current_link")"
-fi
+previous_release="$current_release"
 
 ln -sfn "$release_dir" "${current_link}.next"
 mv -Tf "${current_link}.next" "$current_link"
@@ -128,6 +133,7 @@ EnvironmentFile=${env_file}
 Environment=BUNDLE_DEPLOYMENT=true
 Environment=BUNDLE_PATH=${shared_root}/bundle
 Environment=BUNDLE_WITHOUT=development:test
+Environment="PATH=${runtime_path}"
 ExecStart=${bundle_bin} exec puma -C config/puma.rb
 Restart=on-failure
 RestartSec=5
@@ -168,7 +174,7 @@ if [[ "$healthy" != "true" ]]; then
   echo "new Prism Hub release failed the local health check" >&2
   sudo systemctl --no-pager --full status "$service_name" || true
 
-  if [[ -n "$previous_release" && -d "$previous_release" ]]; then
+  if [[ -n "$previous_release" && "$previous_release" != "$release_dir" && -d "$previous_release" ]]; then
     ln -sfn "$previous_release" "${current_link}.rollback"
     mv -Tf "${current_link}.rollback" "$current_link"
     sudo systemctl restart "$service_name"
