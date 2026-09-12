@@ -91,7 +91,7 @@ jobs:
 
           script_fragments = {
             'deploy script' => [
-              '/srv/${app_name}/shared',
+              'shared_root="${app_root}/shared"',
               'database.env',
               'DATABASE_URL must remain VPS-local',
               'run Bootstrap production database first'
