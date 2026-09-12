@@ -13,10 +13,10 @@ Create or use the `production` Environment in this repository.
 
 Required Environment secrets:
 
-- `PRISM_HUB_DEPLOY_HOST` — SSH hostname or address of the VPS.
-- `PRISM_HUB_DEPLOY_USER` — unprivileged SSH deployment account.
-- `PRISM_HUB_DEPLOY_SSH_KEY` — private key for that account.
-- `PRISM_HUB_DEPLOY_KNOWN_HOSTS` — pinned OpenSSH `known_hosts` entry for the VPS. The workflow never disables host verification.
+- `SSH_HOST` — SSH hostname or address of the VPS.
+- `SSH_USER` — unprivileged SSH deployment account.
+- `SSH_PRIVATE_KEY` — private key for that account.
+- `SSH_KNOWN_HOSTS` — pinned OpenSSH `known_hosts` entry for the VPS. The workflow never disables host verification.
 - `DATABASE_URL` — production PostgreSQL connection URL.
 - `SECRET_KEY_BASE` — production Rails secret, at least 64 random characters.
 - `PRISM_HUB_PROVIDER_TOKEN` — strict Base64 for exactly 32 random bytes; this encrypts provider credentials at rest.
@@ -27,7 +27,7 @@ Required Environment variable:
 
 Optional Environment variables:
 
-- `PRISM_HUB_DEPLOY_PORT` — SSH port, default `22`.
+- `SSH_PORT` — SSH port, default `22`.
 - `PRISM_HUB_CHANNELS_JSON` — provider-neutral channel configuration, default `[]`.
 - `PRISM_RUNTIME_COMMAND_JSON` — Prism execution command, default `["prism-runtime","--json"]`.
 - `PRISM_RUNTIME_TIMEOUT_SECONDS` — default `10`.
