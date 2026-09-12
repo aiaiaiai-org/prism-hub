@@ -80,12 +80,39 @@ jobs:
             exit 78
           fi
 
-          ruby -ruri -e '
-            uri = URI.parse(ENV.fetch("HQBASE_ORIGIN"))
-            valid_path = uri.path.nil? || uri.path.empty? || uri.path == "/"
-            abort "HQBASE_ORIGIN must be an HTTPS origin without credentials, query, fragment, or path" unless
-              uri.is_a?(URI::HTTPS) && uri.host && !uri.userinfo && !uri.query && !uri.fragment && valid_path
-          '
+          python3 <<'PY'
+          import base64
+          import binascii
+          import os
+          from urllib.parse import urlparse
+
+          if len(os.environ["SECRET_KEY_BASE"]) < 64:
+              raise SystemExit("SECRET_KEY_BASE must contain at least 64 characters")
+
+          try:
+              provider_key = base64.b64decode(
+                  os.environ["PRISM_HUB_PROVIDER_TOKEN"],
+                  validate=True,
+              )
+          except (binascii.Error, ValueError) as error:
+              raise SystemExit("PRISM_HUB_PROVIDER_TOKEN must be strict Base64") from error
+          if len(provider_key) != 32:
+              raise SystemExit("PRISM_HUB_PROVIDER_TOKEN must decode to exactly 32 bytes")
+
+          origin = urlparse(os.environ["HQBASE_ORIGIN"])
+          if not (
+              origin.scheme == "https"
+              and origin.hostname
+              and origin.username is None
+              and origin.password is None
+              and origin.query == ""
+              and origin.fragment == ""
+              and origin.path in ("", "/")
+          ):
+              raise SystemExit(
+                  "HQBASE_ORIGIN must be an HTTPS origin without credentials, query, fragment, or path"
+              )
+          PY
 
       - name: Build immutable source archive
         shell: bash
