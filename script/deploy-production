@@ -1,0 +1,193 @@
+#!/usr/bin/env bash
+# © 2026 aiaiaiai · aiaiaiai.org
+
+set -Eeuo pipefail
+
+if [[ $# -ne 3 ]]; then
+  echo "usage: deploy-production RELEASE_SHA ARCHIVE_PATH ENV_FILE_PATH" >&2
+  exit 64
+fi
+
+release_sha="$1"
+archive_path="$2"
+incoming_env_path="$3"
+
+if [[ ! "$release_sha" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "release SHA must be a full Git commit SHA" >&2
+  exit 64
+fi
+
+app_name="prism-hub"
+app_root="/srv/${app_name}"
+releases_root="${app_root}/releases"
+shared_root="${app_root}/shared"
+release_dir="${releases_root}/${release_sha}"
+env_file="${shared_root}/production.env"
+current_link="${app_root}/current"
+service_name="${app_name}.service"
+deploy_user="$(id -un)"
+deploy_group="$(id -gn)"
+
+required_commands=(bundle curl ruby sudo systemctl systemd-run tar)
+for command_name in "${required_commands[@]}"; do
+  if ! command -v "$command_name" >/dev/null 2>&1; then
+    echo "missing required command on deployment host: ${command_name}" >&2
+    exit 69
+  fi
+done
+
+if ! sudo -n true >/dev/null 2>&1; then
+  echo "deployment user requires passwordless sudo for service management" >&2
+  exit 77
+fi
+
+ruby_version="$(ruby -e 'print RUBY_VERSION')"
+if [[ "$ruby_version" != "4.0.6" ]]; then
+  echo "Ruby 4.0.6 is required on the deployment host; found ${ruby_version}" >&2
+  exit 69
+fi
+
+if [[ ! -f "$archive_path" || ! -f "$incoming_env_path" ]]; then
+  echo "deployment archive or environment file is missing" >&2
+  exit 66
+fi
+
+sudo install -d -m 0755 -o "$deploy_user" -g "$deploy_group" \
+  "$app_root" "$releases_root" "$shared_root"
+
+install -m 0600 "$incoming_env_path" "$env_file"
+rm -f "$incoming_env_path"
+
+if [[ -e "$release_dir" ]]; then
+  echo "release ${release_sha} already exists" >&2
+  exit 73
+fi
+
+mkdir -m 0755 "$release_dir"
+tar -xzf "$archive_path" -C "$release_dir"
+rm -f "$archive_path"
+
+bundle_bin="$(command -v bundle)"
+export BUNDLE_DEPLOYMENT="true"
+export BUNDLE_PATH="${shared_root}/bundle"
+export BUNDLE_WITHOUT="development:test"
+
+(
+  cd "$release_dir"
+  "$bundle_bin" install --jobs 4 --retry 3
+)
+
+run_with_runtime_env() {
+  local working_directory="$1"
+  shift
+
+  sudo systemd-run \
+    --quiet \
+    --wait \
+    --collect \
+    --pipe \
+    --uid="$deploy_user" \
+    --gid="$deploy_group" \
+    --working-directory="$working_directory" \
+    --property="EnvironmentFile=${env_file}" \
+    --setenv="BUNDLE_DEPLOYMENT=true" \
+    --setenv="BUNDLE_PATH=${shared_root}/bundle" \
+    --setenv="BUNDLE_WITHOUT=development:test" \
+    -- "$@"
+}
+
+run_with_runtime_env "$release_dir" "$bundle_bin" exec rails db:migrate
+
+previous_release=""
+if [[ -L "$current_link" ]]; then
+  previous_release="$(readlink -f "$current_link")"
+fi
+
+ln -sfn "$release_dir" "${current_link}.next"
+mv -Tf "${current_link}.next" "$current_link"
+
+service_file="$(mktemp)"
+cleanup() {
+  rm -f "$service_file"
+}
+trap cleanup EXIT
+
+cat >"$service_file" <<EOF
+# © 2026 aiaiaiai · aiaiaiai.org
+[Unit]
+Description=Prism Hub
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=${deploy_user}
+Group=${deploy_group}
+WorkingDirectory=${current_link}
+EnvironmentFile=${env_file}
+Environment=BUNDLE_DEPLOYMENT=true
+Environment=BUNDLE_PATH=${shared_root}/bundle
+Environment=BUNDLE_WITHOUT=development:test
+ExecStart=${bundle_bin} exec puma -C config/puma.rb
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+KillSignal=SIGTERM
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=${app_root}
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo install -m 0644 "$service_file" "/etc/systemd/system/${service_name}"
+sudo systemctl daemon-reload
+sudo systemctl enable "$service_name" >/dev/null
+sudo systemctl restart "$service_name"
+
+health_url="http://127.0.0.1:3000/healthz"
+healthy=false
+for _attempt in $(seq 1 30); do
+  if curl \
+    --fail \
+    --silent \
+    --show-error \
+    --max-time 2 \
+    --header 'X-Forwarded-Proto: https' \
+    "$health_url" >/dev/null; then
+    healthy=true
+    break
+  fi
+  sleep 1
+done
+
+if [[ "$healthy" != "true" ]]; then
+  echo "new Prism Hub release failed the local health check" >&2
+  sudo systemctl --no-pager --full status "$service_name" || true
+
+  if [[ -n "$previous_release" && -d "$previous_release" ]]; then
+    ln -sfn "$previous_release" "${current_link}.rollback"
+    mv -Tf "${current_link}.rollback" "$current_link"
+    sudo systemctl restart "$service_name"
+    echo "rolled service pointer back to the previous release" >&2
+  fi
+
+  exit 70
+fi
+
+mapfile -t stale_releases < <(
+  find "$releases_root" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' \
+    | sort -nr \
+    | tail -n +6 \
+    | cut -d' ' -f2-
+)
+for stale_release in "${stale_releases[@]}"; do
+  [[ "$stale_release" == "$release_dir" ]] && continue
+  [[ -n "$previous_release" && "$stale_release" == "$previous_release" ]] && continue
+  rm -rf -- "$stale_release"
+done
+
+printf 'deployed prism-hub %s\n' "$release_sha"
