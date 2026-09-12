@@ -5,9 +5,11 @@ name: Validate deploy
 on:
   pull_request:
     paths:
+      - '.github/workflows/bootstrap-production-database.yml'
       - '.github/workflows/deploy-production.yml'
       - '.github/workflows/validate-deploy.yml'
       - '.github/workflows/full-ci.yml'
+      - 'script/bootstrap-production-database'
       - 'script/deploy-production'
       - 'config/database.yml'
       - 'config/environments/production.rb'
@@ -37,7 +39,9 @@ jobs:
 
       - name: Validate deployment script syntax
         shell: bash
-        run: bash -n script/deploy-production
+        run: |
+          bash -n script/deploy-production
+          bash -n script/bootstrap-production-database
 
       - name: Validate workflow contract
         shell: bash
@@ -46,8 +50,9 @@ jobs:
 
           ruby <<'RUBY'
           deploy = File.read('.github/workflows/deploy-production.yml')
+          bootstrap = File.read('.github/workflows/bootstrap-production-database.yml')
 
-          required_fragments = [
+          deploy_fragments = [
             'workflow_dispatch:',
             'environment: production',
             'contents: read',
@@ -62,11 +67,26 @@ jobs:
             'SECRET_KEY_BASE',
             'script/deploy-production'
           ]
-
-          missing = required_fragments.reject { |fragment| deploy.include?(fragment) }
+          missing = deploy_fragments.reject { |fragment| deploy.include?(fragment) }
           abort "deploy workflow is missing: #{missing.join(', ')}" unless missing.empty?
           abort 'deploy workflow must not deploy on push' if deploy.match?(/^\s+push:\s*$/)
           abort 'deploy workflow must not disable SSH host verification' if deploy.include?('StrictHostKeyChecking=no')
+
+          bootstrap_fragments = [
+            'workflow_dispatch:',
+            'environment: production',
+            'secrets.SSH_HOST',
+            'secrets.SSH_USER',
+            'secrets.SSH_PRIVATE_KEY',
+            'secrets.DATABASE_URL',
+            'script/bootstrap-production-database',
+            'prism_hub_production',
+            'prism_hub'
+          ]
+          missing = bootstrap_fragments.reject { |fragment| bootstrap.include?(fragment) }
+          abort "database bootstrap workflow is missing: #{missing.join(', ')}" unless missing.empty?
+          abort 'database bootstrap must not run on push' if bootstrap.match?(/^\s+push:\s*$/)
+          abort 'database bootstrap must not disable SSH host verification' if bootstrap.include?('StrictHostKeyChecking=no')
           RUBY
 
       - name: Validate immutable archive contract
@@ -76,6 +96,7 @@ jobs:
           archive="${RUNNER_TEMP}/prism-hub-validate.tar.gz"
           git archive --format=tar.gz --output="$archive" HEAD
           tar -tzf "$archive" | grep -Fx 'script/deploy-production' >/dev/null
+          tar -tzf "$archive" | grep -Fx 'script/bootstrap-production-database' >/dev/null
 
       - name: Validate production runtime configuration
         shell: bash
