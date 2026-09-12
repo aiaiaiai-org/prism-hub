@@ -24,6 +24,7 @@ jobs:
       SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
       SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
       SSH_PORT: ${{ vars.SSH_PORT || '22' }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
     steps:
       - name: Check out production source
@@ -42,6 +43,21 @@ jobs:
             exit 64
           fi
 
+          if [[ -n "$DATABASE_URL" ]]; then
+            python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+
+          value = os.environ["DATABASE_URL"]
+          parsed = urlparse(value)
+          if parsed.scheme not in ("postgres", "postgresql"):
+              raise SystemExit("DATABASE_URL must use postgres:// or postgresql://")
+          if not parsed.path or parsed.path == "/":
+              raise SystemExit("DATABASE_URL must select a database")
+          PY
+            exit 0
+          fi
+
           for variable_name in SSH_HOST SSH_USER SSH_PRIVATE_KEY; do
             if [[ -z "${!variable_name:-}" ]]; then
               echo "Missing production environment value: ${variable_name}" >&2
@@ -54,7 +70,20 @@ jobs:
             exit 78
           fi
 
+      - name: Record configured database
+        if: ${{ env.DATABASE_URL != '' }}
+        shell: bash
+        run: |
+          {
+            echo '### Prism Hub production database'
+            echo
+            echo '- source: configured `DATABASE_URL` Environment secret'
+            echo '- local VPS bootstrap: skipped'
+            echo '- connection verification: deferred to deployment/migrations'
+          } >>"$GITHUB_STEP_SUMMARY"
+
       - name: Configure bootstrap SSH trust
+        if: ${{ env.DATABASE_URL == '' }}
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -89,6 +118,7 @@ jobs:
           } >>"$GITHUB_STEP_SUMMARY"
 
       - name: Bootstrap PostgreSQL role and database
+        if: ${{ env.DATABASE_URL == '' }}
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -116,13 +146,15 @@ jobs:
           ssh "${ssh_options[@]}" "$SSH_USER@$SSH_HOST" \
             "chmod 700 '${remote_script}' && '${remote_script}'; status=\$?; rm -f '${remote_script}'; exit \$status"
 
-      - name: Record bootstrap result
+      - name: Record local bootstrap result
+        if: ${{ env.DATABASE_URL == '' }}
         shell: bash
         run: |
           {
             echo
             echo '### Prism Hub production database'
             echo
+            echo '- source: managed VPS-local fallback'
             echo '- role: `prism_hub`'
             echo '- database: `prism_hub_production`'
             echo '- host: `127.0.0.1:5432` on the VPS'
