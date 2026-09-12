@@ -5,14 +5,19 @@ module PrismHub
   module Interfaces
     module Cli
       class RunMailDigest
-        def initialize(generate_mail_digest:, out: $stdout, errors: $stderr)
+        def initialize(generate_mail_digest:, generate_mail_digests:, out: $stdout, errors: $stderr)
           @generate_mail_digest = generate_mail_digest
+          @generate_mail_digests = generate_mail_digests
           @out = out
           @errors = errors
         end
 
         def call(mailbox_id:, since:, before:)
-          artifact = @generate_mail_digest.call(mailbox_id: mailbox_id, since: since, before: before)
+          artifact = if mailbox_id.nil? || mailbox_id.empty?
+            @generate_mail_digests.call(since: since, before: before)
+          else
+            @generate_mail_digest.call(mailbox_id: mailbox_id, since: since, before: before)
+          end
           @out.puts(JSON.generate(artifact))
           0
         rescue PrismHub::Error => error
