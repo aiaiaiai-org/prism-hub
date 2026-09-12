@@ -45,7 +45,7 @@ PRISM_MAIL_BEFORE=2026-09-11T00:00:00Z \
 `PRISM_MAIL_MAILBOX_ID` is optional. When it is omitted, Hub discovers the visible
 mailboxes and executes the deterministic single-mailbox Prism Mail worker once per
 mailbox. Hub then returns one `prism-hub.mail-digests.v1` aggregate with per-mailbox
-`prism-mail.digest.v1` artifacts and summed matched/selected/omitted counts:
+`prism-mail.digest.v1` artifacts and aggregate matched/selected/omitted counts:
 
 ```sh
 PRISM_MAIL_SINCE=2026-09-10T00:00:00Z \
@@ -53,11 +53,19 @@ PRISM_MAIL_BEFORE=2026-09-11T00:00:00Z \
   bundle exec ruby bin/prism-hub-run-mail-digest
 ```
 
-The aggregate also exposes a top-level `entries` timeline. It contains the selected
-source excerpts from every child digest, tagged with their mailbox metadata and
-sorted newest-first across mailbox boundaries. Equal timestamps are resolved by
-stable mailbox and evidence identifiers, so the same inputs always produce the same
-order. The original per-mailbox digests remain available for provenance.
+The aggregate also exposes a top-level `entries` timeline. It contains source
+excerpts from every child digest, tagged with their mailbox metadata and sorted
+newest-first across mailbox boundaries. Equal timestamps are resolved by stable
+mailbox and evidence identifiers, so the same inputs always produce the same order.
+The original per-mailbox digests remain available for provenance.
+
+The top-level timeline is capped at the newest 20 entries by default. The aggregate
+artifact reports that bound as `limit`. Its `matched_count` is the sum of all child
+matches, while `selected_count` is the number actually retained in the global
+timeline and `omitted_count` is the remainder. Child digests preserve their own
+selection and omission counts, so no provenance is lost when the aggregate is kept
+compact. The use-case boundary supports limits from 1 through 100 for future callers;
+the current operator command uses the default.
 
 Before aggregation, Hub verifies that every child artifact preserves the expected
 schema, mode, mailbox identity, canonical time window, count invariants, evidence
@@ -65,9 +73,10 @@ mailbox boundary, and evidence timestamps. Invalid child output fails the aggreg
 instead of silently producing a misleading digest. The request window is validated
 before mailbox discovery, so invalid input does not cause provider access.
 
-This ordering is chronological, not semantic. `prism-hub.mail-digests.v1` does not
-score importance, classify messages, summarize content, or infer actions. Those are
-explicitly outside the extractive digest contract.
+This ordering and truncation are chronological, not semantic.
+`prism-hub.mail-digests.v1` does not score importance, classify messages, summarize
+content, or infer actions. Those are explicitly outside the extractive digest
+contract.
 
 Prism Mail remains a single-mailbox deterministic adapter. Mailbox discovery,
 selection, OAuth lifecycle, and multi-mailbox orchestration belong to Prism Hub.

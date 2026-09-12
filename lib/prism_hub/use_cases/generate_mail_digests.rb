@@ -6,10 +6,14 @@ module PrismHub
       SCHEMA_VERSION = "prism-hub.mail-digests.v1".freeze
       CHILD_SCHEMA_VERSION = "prism-mail.digest.v1".freeze
       MODE = "extractive".freeze
+      DEFAULT_LIMIT = 20
+      MAX_LIMIT = 100
 
-      def initialize(list_mailboxes:, generate_mail_digest:)
+      def initialize(list_mailboxes:, generate_mail_digest:, limit: DEFAULT_LIMIT)
         @list_mailboxes = list_mailboxes
         @generate_mail_digest = generate_mail_digest
+        @limit = Integer(limit)
+        raise ArgumentError unless (1..MAX_LIMIT).cover?(@limit)
       end
 
       def call(since:, before:, mailbox_ids: nil)
@@ -24,16 +28,18 @@ module PrismHub
           validate_digest!(digest, mailbox: mailbox, window: window)
           digest
         end
-        entries = timeline_entries(selected_mailboxes, digests)
+        matched_count = sum(digests, "matched_count")
+        entries = timeline_entries(selected_mailboxes, digests).first(@limit)
 
         {
           "schema_version" => SCHEMA_VERSION,
           "mode" => MODE,
           "window" => window,
+          "limit" => @limit,
           "mailbox_count" => selected_mailboxes.length,
-          "matched_count" => sum(digests, "matched_count"),
-          "selected_count" => sum(digests, "selected_count"),
-          "omitted_count" => sum(digests, "omitted_count"),
+          "matched_count" => matched_count,
+          "selected_count" => entries.length,
+          "omitted_count" => matched_count - entries.length,
           "entries" => entries,
           "digests" => selected_mailboxes.zip(digests).map do |mailbox, digest|
             {"mailbox" => mailbox.public_attributes, "digest" => digest}
