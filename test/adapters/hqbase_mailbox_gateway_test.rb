@@ -57,16 +57,23 @@ class HqbaseMailboxGatewayTest < Minitest::Test
     assert_equal "hub.mail.mailboxes.access_denied", error.code
   end
 
-  def test_rejects_invalid_mailbox_payload
-    gateway = PrismHub::Adapters::HqbaseMailboxGateway.new(
+  def test_rejects_malformed_json_separately_from_invalid_payload
+    malformed = PrismHub::Adapters::HqbaseMailboxGateway.new(
+      origin: "https://mail.aiaiaiai.org",
+      transport: ->(**) { {status: 200, body: "not-json"} }
+    )
+    malformed_error = assert_raises(PrismHub::ExecutionUnavailableError) do
+      malformed.list(access_token: "secret-token")
+    end
+    assert_equal "hub.mail.mailboxes.invalid_json", malformed_error.code
+
+    invalid = PrismHub::Adapters::HqbaseMailboxGateway.new(
       origin: "https://mail.aiaiaiai.org",
       transport: ->(**) { {status: 200, body: '[{"id":"mbx_1"}]'} }
     )
-
-    error = assert_raises(PrismHub::ExecutionUnavailableError) do
-      gateway.list(access_token: "secret-token")
+    invalid_error = assert_raises(PrismHub::ExecutionUnavailableError) do
+      invalid.list(access_token: "secret-token")
     end
-
-    assert_equal "hub.mail.mailboxes.invalid_json", error.code
+    assert_equal "hub.mail.mailboxes.invalid_payload", invalid_error.code
   end
 end

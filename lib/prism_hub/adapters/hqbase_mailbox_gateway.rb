@@ -82,10 +82,14 @@ module PrismHub
       end
 
       def parse_mailboxes(body)
-        payload = JSON.parse(body)
-        raise JSON::ParserError, "expected array" unless payload.is_a?(Array)
+        payload = parse_json(body)
+        invalid_payload!("root") unless payload.is_a?(Array)
 
         payload.map { |mailbox| mailbox_value(mailbox) }.freeze
+      end
+
+      def parse_json(body)
+        JSON.parse(body)
       rescue JSON::ParserError
         raise ExecutionUnavailableError.new(
           "hub.mail.mailboxes.invalid_json",
@@ -94,7 +98,7 @@ module PrismHub
       end
 
       def mailbox_value(payload)
-        raise JSON::ParserError, "expected object" unless payload.is_a?(Hash)
+        invalid_payload!("mailbox") unless payload.is_a?(Hash)
 
         Domain::Mailbox.new(
           id: required_string(payload, "id"),
@@ -104,25 +108,29 @@ module PrismHub
           access_level: required_string(payload, "accessLevel")
         )
       rescue InputError => error
-        raise ExecutionUnavailableError.new(
-          "hub.mail.mailboxes.invalid_payload",
-          "HQBase mailbox discovery returned an invalid mailbox",
-          details: {"cause" => error.code}
-        )
+        invalid_payload!(error.code)
       end
 
       def required_string(payload, key)
         value = payload[key]
         return value if value.is_a?(String) && !value.empty?
 
-        raise JSON::ParserError, "missing #{key}"
+        invalid_payload!(key)
       end
 
       def required_boolean(payload, key)
         value = payload[key]
         return value if value == true || value == false
 
-        raise JSON::ParserError, "missing #{key}"
+        invalid_payload!(key)
+      end
+
+      def invalid_payload!(field)
+        raise ExecutionUnavailableError.new(
+          "hub.mail.mailboxes.invalid_payload",
+          "HQBase mailbox discovery returned an invalid mailbox payload",
+          details: {"field" => field}
+        )
       end
 
       def normalized_origin(value)
