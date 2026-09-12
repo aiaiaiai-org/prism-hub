@@ -102,7 +102,9 @@ jobs:
               'prism_hub_production',
               'prism_hub',
               'database.env',
-              'DATABASE_URL=postgresql://'
+              'DATABASE_URL=postgresql://',
+              'sudo -n -u postgres psql',
+              '<"$sql_file"'
             ]
           }
           scripts = {
@@ -113,6 +115,7 @@ jobs:
             missing = fragments.reject { |fragment| scripts.fetch(name).include?(fragment) }
             abort "#{name} is missing: #{missing.join(', ')}" unless missing.empty?
           end
+          abort 'database bootstrap must not make postgres read a deploy-owned private SQL file' if bootstrap_script.include?('--file="$sql_file"')
           RUBY
 
       - name: Validate immutable archive contract
