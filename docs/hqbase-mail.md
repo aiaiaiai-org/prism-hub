@@ -53,6 +53,22 @@ PRISM_MAIL_BEFORE=2026-09-11T00:00:00Z \
   bundle exec ruby bin/prism-hub-run-mail-digest
 ```
 
+The aggregate also exposes a top-level `entries` timeline. It contains the selected
+source excerpts from every child digest, tagged with their mailbox metadata and
+sorted newest-first across mailbox boundaries. Equal timestamps are resolved by
+stable mailbox and evidence identifiers, so the same inputs always produce the same
+order. The original per-mailbox digests remain available for provenance.
+
+Before aggregation, Hub verifies that every child artifact preserves the expected
+schema, mode, mailbox identity, canonical time window, count invariants, evidence
+mailbox boundary, and evidence timestamps. Invalid child output fails the aggregate
+instead of silently producing a misleading digest. The request window is validated
+before mailbox discovery, so invalid input does not cause provider access.
+
+This ordering is chronological, not semantic. `prism-hub.mail-digests.v1` does not
+score importance, classify messages, summarize content, or infer actions. Those are
+explicitly outside the extractive digest contract.
+
 Prism Mail remains a single-mailbox deterministic adapter. Mailbox discovery,
 selection, OAuth lifecycle, and multi-mailbox orchestration belong to Prism Hub.
 This keeps HQBase provider semantics out of Prism Mail's digest contract while
