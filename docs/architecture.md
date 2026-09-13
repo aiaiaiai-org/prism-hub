@@ -9,9 +9,9 @@ in outer adapters.
 
 | Boundary | Owns | Must not own |
 | --- | --- | --- |
-| Domain | Immutable Hub channel, publication-request, delivery-intent, and authorisation values | Rails, JSON parsing, provider HTTP, persistence |
+| Domain | Immutable Hub channel, publication-request, delivery-intent, transport-binding, and authorisation values | Rails, JSON parsing, provider HTTP, persistence |
 | Use cases | Channel discovery, execution orchestration, delivery-intent construction, authorization policy, and client-credential lifecycle | ActiveRecord, process spawning, provider tokens, HTTP responses |
-| Ports | Focused channel lookup, Prism execution, Porter presentation, principal persistence, and client-credential persistence capabilities | Concrete storage or runtime choices |
+| Ports | Focused channel lookup, Prism execution, Porter presentation, transport binding, principal persistence, and client-credential persistence capabilities | Concrete storage or runtime choices |
 | Adapters | Environment configuration, PostgreSQL records/repositories, secret generation, and local process mechanics | Hub application policy |
 | HTTP interface | Bearer extraction, request decoding, status mapping, OpenAPI surface | Provider, dispatch, capability, or channel authorization policy |
 
@@ -105,6 +105,29 @@ logical context to a persisted Telegram surface binding and dispatching the
 verified chunks are separate application boundaries; this worker integration
 does not invent either one.
 
+## Telegram surface bindings
+
+`TelegramSurfaceBinding` is the Hub-owned bridge from a Porter's logical context
+to a concrete Telegram transport surface. A binding belongs to one workspace and
+one persistent bot instance, names one logical channel, and stores only the
+Telegram `chat_id` plus optional `message_thread_id` needed to address that
+surface. Provider identity evidence is not reused for this purpose.
+
+An active logical `(workspace, channel)` maps to exactly one active Telegram
+surface. Within one bot instance, an active root chat or topic maps to exactly one
+logical context. Root chat and each topic are distinct surfaces, so one Telegram
+chat may host several independent Prism routes without state or delivery leakage.
+
+Binding mutations require an active workspace owner and are audited with creator
+and revoker identities. Revocation is retained as history and frees both active
+uniqueness constraints for an explicit rebind. Disabled bot instances cannot
+receive new bindings; paused instances keep their bindings because pause controls
+execution, not ownership of the route.
+
+The persistence adapter is intentionally below the future HTTP/client surface.
+Exposing an authorized bind/resolve operation and dispatching verified Porter
+chunks through a provider adapter are separate changes.
+
 ## Security boundary
 
 - Hub API credentials are distinct from provider credentials.
@@ -114,6 +137,7 @@ does not invent either one.
 - Request bodies have a bounded size and strict top-level fields.
 - Runtime and Porter commands are arrays passed directly to `exec`; no shell parses command text.
 - Runtime and Porter stdout are size-bounded and contract-checked. Stderr and request payloads are never reflected to clients.
+- Telegram route ownership is persisted independently from Telegram human identity evidence.
 - A timeout or malformed worker response is observable as a stable `503`, not retried implicitly.
 - `outcome_unknown` remains a Prism result and must never be transformed into a normal retryable failure.
 
