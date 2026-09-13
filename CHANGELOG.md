@@ -20,5 +20,6 @@ All notable changes to Prism Hub will be documented here.
 - Versioned channel, validation, and publication API contract.
 - Injected `prism-execution.v1` process adapter.
 - Provider-neutral Prism Porter gateway with strict `prism-porter.delivery-intent.v1` verification.
+- Audited Telegram surface bindings from logical Porter context to chat/topic transport coordinates.
 
 <!-- © 2026 aiaiaiai · aiaiaiai.org -->
