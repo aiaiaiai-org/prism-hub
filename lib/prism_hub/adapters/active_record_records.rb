@@ -14,6 +14,10 @@ module PrismHub
           class_name: "PrismHub::Adapters::ActiveRecordRecords::BotInstance",
           inverse_of: :workspace,
           dependent: :restrict_with_exception
+        has_many :telegram_surface_bindings,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::TelegramSurfaceBinding",
+          inverse_of: :workspace,
+          dependent: :restrict_with_exception
       end
 
       class ServicePrincipal < ::ActiveRecord::Base
@@ -87,6 +91,16 @@ module PrismHub
           foreign_key: :actor_user_identity_id,
           inverse_of: :actor_user_identity,
           dependent: :restrict_with_exception
+        has_many :created_telegram_surface_bindings,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::TelegramSurfaceBinding",
+          foreign_key: :created_by_user_identity_id,
+          inverse_of: :created_by_user_identity,
+          dependent: :restrict_with_exception
+        has_many :revoked_telegram_surface_bindings,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::TelegramSurfaceBinding",
+          foreign_key: :revoked_by_user_identity_id,
+          inverse_of: :revoked_by_user_identity,
+          dependent: :restrict_with_exception
       end
 
       class ProviderIdentityBinding < ::ActiveRecord::Base
@@ -143,6 +157,10 @@ module PrismHub
           class_name: "PrismHub::Adapters::ActiveRecordRecords::BotInstanceLifecycleEvent",
           inverse_of: :bot_instance,
           dependent: :restrict_with_exception
+        has_many :telegram_surface_bindings,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::TelegramSurfaceBinding",
+          inverse_of: :bot_instance,
+          dependent: :restrict_with_exception
       end
 
       class BotInstanceLifecycleEvent < ::ActiveRecord::Base
@@ -154,6 +172,24 @@ module PrismHub
         belongs_to :actor_user_identity,
           class_name: "PrismHub::Adapters::ActiveRecordRecords::UserIdentity",
           inverse_of: :bot_instance_lifecycle_events
+      end
+
+      class TelegramSurfaceBinding < ::ActiveRecord::Base
+        self.table_name = "telegram_surface_bindings"
+
+        belongs_to :workspace,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::Workspace",
+          inverse_of: :telegram_surface_bindings
+        belongs_to :bot_instance,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::BotInstance",
+          inverse_of: :telegram_surface_bindings
+        belongs_to :created_by_user_identity,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::UserIdentity",
+          inverse_of: :created_telegram_surface_bindings
+        belongs_to :revoked_by_user_identity,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::UserIdentity",
+          inverse_of: :revoked_telegram_surface_bindings,
+          optional: true
       end
     end
   end
