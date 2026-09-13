@@ -283,6 +283,31 @@ CREATE TABLE public.social_accounts (
 
 
 --
+-- Name: telegram_surface_bindings; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.telegram_surface_bindings (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    workspace_id uuid NOT NULL,
+    bot_instance_id uuid NOT NULL,
+    logical_channel character varying(100) NOT NULL,
+    chat_id bigint NOT NULL,
+    message_thread_id bigint,
+    created_by_user_identity_id uuid NOT NULL,
+    status character varying(16) DEFAULT 'active'::character varying NOT NULL,
+    revoked_at timestamp(6) without time zone,
+    revoked_by_user_identity_id uuid,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL,
+    CONSTRAINT telegram_surface_bindings_chat_id_check CHECK ((chat_id <> 0)),
+    CONSTRAINT telegram_surface_bindings_logical_channel_check CHECK (((char_length(btrim((logical_channel)::text)) >= 1) AND (char_length(btrim((logical_channel)::text)) <= 100))),
+    CONSTRAINT telegram_surface_bindings_state_check CHECK (((((status)::text = 'active'::text) AND (revoked_at IS NULL) AND (revoked_by_user_identity_id IS NULL)) OR (((status)::text = 'revoked'::text) AND (revoked_at IS NOT NULL) AND (revoked_by_user_identity_id IS NOT NULL)))),
+    CONSTRAINT telegram_surface_bindings_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'revoked'::character varying])::text[]))),
+    CONSTRAINT telegram_surface_bindings_thread_id_check CHECK (((message_thread_id IS NULL) OR (message_thread_id > 0)))
+);
+
+
+--
 -- Name: user_identities; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -429,6 +454,14 @@ ALTER TABLE ONLY public.social_accounts
 
 
 --
+-- Name: telegram_surface_bindings telegram_surface_bindings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.telegram_surface_bindings
+    ADD CONSTRAINT telegram_surface_bindings_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: user_identities user_identities_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -492,6 +525,27 @@ CREATE UNIQUE INDEX idx_social_account_accesses_account_user ON public.social_ac
 --
 
 CREATE UNIQUE INDEX idx_social_accounts_provider_account ON public.social_accounts USING btree (provider, provider_account_id);
+
+
+--
+-- Name: idx_tg_surface_bindings_active_logical; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_tg_surface_bindings_active_logical ON public.telegram_surface_bindings USING btree (workspace_id, logical_channel) WHERE ((status)::text = 'active'::text);
+
+
+--
+-- Name: idx_tg_surface_bindings_active_root; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_tg_surface_bindings_active_root ON public.telegram_surface_bindings USING btree (bot_instance_id, chat_id) WHERE (((status)::text = 'active'::text) AND (message_thread_id IS NULL));
+
+
+--
+-- Name: idx_tg_surface_bindings_active_topic; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_tg_surface_bindings_active_topic ON public.telegram_surface_bindings USING btree (bot_instance_id, chat_id, message_thread_id) WHERE (((status)::text = 'active'::text) AND (message_thread_id IS NOT NULL));
 
 
 --
@@ -607,6 +661,34 @@ CREATE INDEX index_social_account_accesses_on_user_identity_id ON public.social_
 
 
 --
+-- Name: index_telegram_surface_bindings_on_bot_instance_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_telegram_surface_bindings_on_bot_instance_id ON public.telegram_surface_bindings USING btree (bot_instance_id);
+
+
+--
+-- Name: index_telegram_surface_bindings_on_created_by_user_identity_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_telegram_surface_bindings_on_created_by_user_identity_id ON public.telegram_surface_bindings USING btree (created_by_user_identity_id);
+
+
+--
+-- Name: index_telegram_surface_bindings_on_revoked_by_user_identity_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_telegram_surface_bindings_on_revoked_by_user_identity_id ON public.telegram_surface_bindings USING btree (revoked_by_user_identity_id);
+
+
+--
+-- Name: index_telegram_surface_bindings_on_workspace_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_telegram_surface_bindings_on_workspace_id ON public.telegram_surface_bindings USING btree (workspace_id);
+
+
+--
 -- Name: index_user_identities_on_canonical_type_and_canonical_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -649,6 +731,14 @@ CREATE TRIGGER social_accounts_protect_key BEFORE UPDATE ON public.social_accoun
 
 
 --
+-- Name: telegram_surface_bindings fk_rails_0e5d8d6780; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.telegram_surface_bindings
+    ADD CONSTRAINT fk_rails_0e5d8d6780 FOREIGN KEY (created_by_user_identity_id) REFERENCES public.user_identities(id) ON DELETE RESTRICT;
+
+
+--
 -- Name: workspace_memberships fk_rails_26c4c0bd41; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -673,6 +763,14 @@ ALTER TABLE ONLY public.social_account_accesses
 
 
 --
+-- Name: telegram_surface_bindings fk_rails_51472caa4b; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.telegram_surface_bindings
+    ADD CONSTRAINT fk_rails_51472caa4b FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE RESTRICT;
+
+
+--
 -- Name: channel_grants fk_rails_7d12b56971; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -694,6 +792,14 @@ ALTER TABLE ONLY public.capability_grants
 
 ALTER TABLE ONLY public.workspace_memberships
     ADD CONSTRAINT fk_rails_7e8947d8a0 FOREIGN KEY (user_identity_id) REFERENCES public.user_identities(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: telegram_surface_bindings fk_rails_85883e6952; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.telegram_surface_bindings
+    ADD CONSTRAINT fk_rails_85883e6952 FOREIGN KEY (revoked_by_user_identity_id) REFERENCES public.user_identities(id) ON DELETE RESTRICT;
 
 
 --
@@ -729,6 +835,14 @@ ALTER TABLE ONLY public.bot_instances
 
 
 --
+-- Name: telegram_surface_bindings fk_rails_b581a4da35; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.telegram_surface_bindings
+    ADD CONSTRAINT fk_rails_b581a4da35 FOREIGN KEY (bot_instance_id) REFERENCES public.bot_instances(id) ON DELETE RESTRICT;
+
+
+--
 -- Name: provider_identity_bindings fk_rails_bbe051879c; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -759,6 +873,7 @@ ALTER TABLE ONLY public.social_account_accesses
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260913080000'),
 ('20260911203000'),
 ('20260911183000'),
 ('20260909120000'),
@@ -770,4 +885,3 @@ INSERT INTO "schema_migrations" (version) VALUES
 ('20260827134500'),
 ('20260827112400'),
 ('20260827094700');
-
