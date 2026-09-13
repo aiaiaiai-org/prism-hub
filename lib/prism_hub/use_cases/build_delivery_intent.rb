@@ -5,10 +5,6 @@ module PrismHub
   module UseCases
     class BuildDeliveryIntent
       def initialize(porter_gateway:)
-        unless porter_gateway.is_a?(Ports::PorterGateway)
-          raise ArgumentError, "porter_gateway must be a PorterGateway"
-        end
-
         @porter_gateway = porter_gateway
       end
 
