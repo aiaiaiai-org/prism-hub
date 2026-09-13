@@ -9,9 +9,9 @@ in outer adapters.
 
 | Boundary | Owns | Must not own |
 | --- | --- | --- |
-| Domain | Immutable Hub channel, publication-request, and authorisation values | Rails, JSON parsing, provider HTTP, persistence |
-| Use cases | Channel discovery, execution orchestration, authorization policy, and client-credential lifecycle | ActiveRecord, process spawning, provider tokens, HTTP responses |
-| Ports | Focused channel lookup, Prism execution, principal persistence, and client-credential persistence capabilities | Concrete storage or runtime choices |
+| Domain | Immutable Hub channel, publication-request, delivery-intent, and authorisation values | Rails, JSON parsing, provider HTTP, persistence |
+| Use cases | Channel discovery, execution orchestration, delivery-intent construction, authorization policy, and client-credential lifecycle | ActiveRecord, process spawning, provider tokens, HTTP responses |
+| Ports | Focused channel lookup, Prism execution, Porter presentation, principal persistence, and client-credential persistence capabilities | Concrete storage or runtime choices |
 | Adapters | Environment configuration, PostgreSQL records/repositories, secret generation, and local process mechanics | Hub application policy |
 | HTTP interface | Bearer extraction, request decoding, status mapping, OpenAPI surface | Provider, dispatch, capability, or channel authorization policy |
 
@@ -86,6 +86,25 @@ does not send provider IDs, channel references, credential references, or raw
 tokens. The Hub expands those values from its server-side channel repository only
 after authorization succeeds.
 
+## Delivery presentation boundary
+
+Prism Porter is a deterministic presentation and routing worker, not a transport
+provider. Hub sends a versioned artifact plus an explicit logical route policy to
+the `PorterGateway` port. The subprocess adapter speaks
+`prism-porter.request.v1` and accepts only a contract-checked
+`prism-porter.delivery-intent.v1` response.
+
+A delivery intent contains the artifact identity, logical `workspace` and
+`channel`, plain-text presentation chunks, and a deterministic idempotency key.
+Hub independently verifies the artifact identity, logical context, chunk
+sequence, and idempotency fingerprint before accepting the worker response.
+
+Porter never receives Telegram chat IDs, topic IDs, bot tokens, or provider
+credentials. Concrete transport coordinates remain Hub-owned state. Resolving a
+logical context to a persisted Telegram surface binding and dispatching the
+verified chunks are separate application boundaries; this worker integration
+does not invent either one.
+
 ## Security boundary
 
 - Hub API credentials are distinct from provider credentials.
@@ -93,17 +112,17 @@ after authorization succeeds.
 - Invalid authentication and insufficient authorization remain distinct `401`/`403` states.
 - Ungranted channel discovery is filtered before pagination; explicit publication targets fail closed.
 - Request bodies have a bounded size and strict top-level fields.
-- Runtime commands are JSON arrays passed directly to `exec`; no shell parses environment-controlled command text.
-- Runtime stdout is size-bounded and contract-checked. Stderr and request payloads are never reflected to clients.
-- A timeout or malformed runtime response is observable as a stable `503`, not retried implicitly.
+- Runtime and Porter commands are arrays passed directly to `exec`; no shell parses command text.
+- Runtime and Porter stdout are size-bounded and contract-checked. Stderr and request payloads are never reflected to clients.
+- A timeout or malformed worker response is observable as a stable `503`, not retried implicitly.
 - `outcome_unknown` remains a Prism result and must never be transformed into a normal retryable failure.
 
 ## Extension rules
 
-New OAuth, scheduler, channel-persistence, or job implementations enter as
-adapters to new focused ports only when a proven use case needs them. New
-providers do not add branches to Hub policy: they are configured as channels and
-implemented in `prism`. A remote execution transport may replace the process
-adapter without changing use cases or the public API.
+New OAuth, scheduler, channel-persistence, transport-binding, or job implementations
+enter as adapters to new focused ports only when a proven use case needs them.
+New providers do not add branches to Hub policy: they are configured as channels
+and implemented in `prism`. Remote execution or Porter transports may replace
+local process adapters without changing use cases or public API contracts.
 
 <!-- © 2026 aiaiaiai · aiaiaiai.org -->
