@@ -115,8 +115,11 @@ surface. Provider identity evidence is not reused for this purpose.
 
 An active logical `(workspace, channel)` maps to exactly one active Telegram
 surface. Within one bot instance, an active root chat or topic maps to exactly one
-logical context. Root chat and each topic are distinct surfaces, so one Telegram
-chat may host several independent Prism routes without state or delivery leakage.
+logical context. Physical surface uniqueness is deliberately scoped by
+`bot_instance_id`; Telegram chat/topic coordinates are not treated as global
+route identity across different bot instances. Root chat and each topic are
+distinct surfaces, so one Telegram chat may host several independent Prism routes
+without state or delivery leakage.
 
 Binding mutations require an active workspace owner and are audited with creator
 and revoker identities. Revocation is retained as history and frees both active
