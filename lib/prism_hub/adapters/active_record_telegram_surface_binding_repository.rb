@@ -91,8 +91,8 @@ module PrismHub
             )
           end
 
+          actor = locked_owner!(record.workspace, actor_ref)
           if record.status == STATUS_ACTIVE
-            actor = locked_owner!(record.workspace, actor_ref)
             record.update!(
               status: STATUS_REVOKED,
               revoked_at: timestamp,
