@@ -105,6 +105,7 @@ module PrismHub
       end
 
       def timestamp(value, field)
+        return nil if value.nil?
         return value.utc.freeze if value.is_a?(Time)
         raise InputError.new("hub.delivery_outbox.#{field}.invalid", "#{field} must be a Time")
       end
