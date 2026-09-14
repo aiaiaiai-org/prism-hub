@@ -48,6 +48,12 @@ module PrismHub
         )
         response = Response.new(status: Integer(raw.fetch(:status)), body: String(raw.fetch(:body)))
         parse_response(response, idempotency_key: idempotency_key)
+      rescue Timeout::Error, SocketError, SystemCallError, IOError, OpenSSL::SSL::SSLError => error
+        raise ExecutionUnavailableError.new(
+          "hub.bot.delivery.unavailable",
+          "Prism Bot delivery endpoint is unavailable",
+          details: {"cause" => error.class.name}
+        )
       rescue KeyError, ArgumentError, TypeError, URI::InvalidURIError => error
         raise ExecutionUnavailableError.new(
           "hub.bot.delivery.transport_invalid",
