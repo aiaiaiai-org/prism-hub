@@ -1,0 +1,45 @@
+#!/usr/bin/env ruby
+# © 2026 aiaiaiai · aiaiaiai.org
+# SPDX-License-Identifier: Apache-2.0
+
+ENV["RAILS_ENV"] ||= "production"
+require_relative "../config/environment"
+
+begin
+  interval_seconds = Float(ENV.fetch("PRISM_MAIL_DIGEST_SCHEDULER_INTERVAL_SECONDS", "3600"))
+  window_seconds = Float(ENV.fetch("PRISM_MAIL_DIGEST_SCHEDULER_WINDOW_SECONDS", "3600"))
+  command = JSON.parse(ENV.fetch(
+    "PRISM_MAIL_DIGEST_SCHEDULER_COMMAND_JSON",
+    '["bin/prism-hub-enqueue-mail-digest"]'
+  ))
+  unless command.is_a?(Array) && command.any? && command.all? { |part| part.is_a?(String) && !part.empty? }
+    raise PrismHub::ConfigurationError.new(
+      "hub.mail.digest.scheduler.command.invalid",
+      "scheduler command must be a non-empty JSON string array"
+    )
+  end
+
+  scheduler = PrismHub::UseCases::MailDigestScheduler.new(
+    command: command,
+    interval_seconds: interval_seconds,
+    window_seconds: window_seconds
+  )
+
+  if ENV["PRISM_MAIL_DIGEST_SCHEDULER_ONESHOT"] == "true"
+    scheduler.run_once
+  else
+    scheduler.run
+  end
+rescue JSON::ParserError
+  warn(JSON.generate(error: {code: "hub.command.invalid_json"}))
+  exit 1
+rescue ArgumentError
+  warn(JSON.generate(error: {code: "hub.command.invalid"}))
+  exit 1
+rescue KeyError => error
+  warn(JSON.generate(error: {code: "hub.configuration.missing", key: error.key}))
+  exit 1
+rescue PrismHub::Error => error
+  warn(JSON.generate(error: {code: error.code, details: error.details}))
+  exit 1
+end
