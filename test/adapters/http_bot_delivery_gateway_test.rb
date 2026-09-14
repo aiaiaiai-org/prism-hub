@@ -30,7 +30,7 @@ class HttpBotDeliveryGatewayTest < Minitest::Test
 
     assert_equal 2, results.length
     assert_equal ["first", "second"], transport.requests.map { |request| JSON.parse(request.fetch(:body)).fetch("text") }
-    assert_equal ["chat-123", "chat-123"], transport.requests.map { |request| JSON.parse(request.fetch(:body)).fetch("chat_id") }
+    assert_equal [123, 123], transport.requests.map { |request| JSON.parse(request.fetch(:body)).fetch("chat_id") }
     assert_equal [42, 42], transport.requests.map { |request| JSON.parse(request.fetch(:body)).fetch("message_thread_id") }
     assert_equal ["secret"], transport.requests.map { |request| request.fetch(:headers).fetch("x-prism-bot-delivery-secret") }.uniq
     keys = transport.requests.map { |request| JSON.parse(request.fetch(:body)).fetch("idempotency_key") }
@@ -101,7 +101,7 @@ class HttpBotDeliveryGatewayTest < Minitest::Test
   def binding_for(logical_channel: "digest")
     PrismHub::Domain::TelegramSurfaceBinding.new(
       id: "binding-1", workspace_id: "workspace-1", bot_instance_id: "bot-1", logical_channel: logical_channel,
-      chat_id: "chat-123", message_thread_id: 42, created_by_user_identity_id: "user-1", status: "active"
+      chat_id: 123, message_thread_id: 42, created_by_user_identity_id: "user-1", status: "active"
     )
   end
 end
