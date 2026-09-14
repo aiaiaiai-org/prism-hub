@@ -18,7 +18,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public;
 
 
 --
--- Name: EXTENSION pgcrypto; Type: COMMENT; Schema: -; Owner: -
+-- Name: EXTENSION pgcrypto; Type: COMMENT; Schema: public; Owner: -
 --
 
 COMMENT ON EXTENSION pgcrypto IS 'cryptographic functions';
@@ -161,6 +161,37 @@ CREATE TABLE public.client_credentials (
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
     CONSTRAINT client_credentials_digest_check CHECK (((token_digest)::text ~ '^[0-9a-f]{64}$'::text))
+);
+
+
+--
+-- Name: delivery_outbox_entries; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.delivery_outbox_entries (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    workspace character varying(100) NOT NULL,
+    logical_channel character varying(100) NOT NULL,
+    idempotency_key character varying(64) NOT NULL,
+    intent_payload jsonb NOT NULL,
+    status character varying(16) DEFAULT 'pending'::character varying NOT NULL,
+    attempts integer DEFAULT 0 NOT NULL,
+    available_at timestamp(6) without time zone NOT NULL,
+    locked_at timestamp(6) without time zone,
+    lock_token character varying(64),
+    delivered_at timestamp(6) without time zone,
+    failed_at timestamp(6) without time zone,
+    last_error_code character varying(160),
+    last_error_details jsonb,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL,
+    CONSTRAINT delivery_outbox_entries_attempts_check CHECK ((attempts >= 0)),
+    CONSTRAINT delivery_outbox_entries_channel_check CHECK (((char_length(btrim((logical_channel)::text)) >= 1) AND (char_length(btrim((logical_channel)::text)) <= 100))),
+    CONSTRAINT delivery_outbox_entries_delivered_at_check CHECK (((((status)::text = 'delivered'::text) AND (delivered_at IS NOT NULL)) OR ((status)::text <> 'delivered'::text))),
+    CONSTRAINT delivery_outbox_entries_idempotency_key_check CHECK (((idempotency_key)::text ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT delivery_outbox_entries_processing_lock_check CHECK (((((status)::text = 'processing'::text) AND (locked_at IS NOT NULL) AND (lock_token IS NOT NULL)) OR ((status)::text <> 'processing'::text))),
+    CONSTRAINT delivery_outbox_entries_status_check CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'processing'::character varying, 'delivered'::character varying, 'failed'::character varying])::text[]))),
+    CONSTRAINT delivery_outbox_entries_workspace_check CHECK (((char_length(btrim((workspace)::text)) >= 1) AND (char_length(btrim((workspace)::text)) <= 100)))
 );
 
 
@@ -406,6 +437,14 @@ ALTER TABLE ONLY public.client_credentials
 
 
 --
+-- Name: delivery_outbox_entries delivery_outbox_entries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.delivery_outbox_entries
+    ADD CONSTRAINT delivery_outbox_entries_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: mail_provider_credentials mail_provider_credentials_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -500,6 +539,20 @@ CREATE UNIQUE INDEX idx_bot_instances_principal_workspace ON public.bot_instance
 
 
 --
+-- Name: idx_delivery_outbox_due; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_delivery_outbox_due ON public.delivery_outbox_entries USING btree (status, available_at);
+
+
+--
+-- Name: idx_delivery_outbox_lock_token; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_delivery_outbox_lock_token ON public.delivery_outbox_entries USING btree (lock_token) WHERE (lock_token IS NOT NULL);
+
+
+--
 -- Name: idx_mail_provider_credentials_identity; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -580,6 +633,13 @@ CREATE INDEX index_bot_instances_on_service_principal_id ON public.bot_instances
 -- Name: index_bot_instances_on_workspace_id; Type: INDEX; Schema: public; Owner: -
 --
 
+CREATE INDEX index_bot_instances_on_workspace_id ON public.bot_instances USING btree (service_principal_id);
+
+
+--
+-- Name: index_bot_instances_on_workspace_id; Type: INDEX; Schema: public; Owner: -
+--
+
 CREATE INDEX index_bot_instances_on_workspace_id ON public.bot_instances USING btree (workspace_id);
 
 
@@ -623,6 +683,13 @@ CREATE INDEX index_client_credentials_on_service_principal_id ON public.client_c
 --
 
 CREATE UNIQUE INDEX index_client_credentials_on_token_digest ON public.client_credentials USING btree (token_digest);
+
+
+--
+-- Name: index_delivery_outbox_entries_on_idempotency_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_delivery_outbox_entries_on_idempotency_key ON public.delivery_outbox_entries USING btree (idempotency_key);
 
 
 --
@@ -866,13 +933,13 @@ ALTER TABLE ONLY public.social_account_accesses
     ADD CONSTRAINT fk_rails_ea248aecc3 FOREIGN KEY (social_account_id) REFERENCES public.social_accounts(id) ON DELETE RESTRICT;
 
 
---
 -- PostgreSQL database dump complete
 --
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260914020000'),
 ('20260913080000'),
 ('20260911203000'),
 ('20260911183000'),
@@ -885,4 +952,3 @@ INSERT INTO "schema_migrations" (version) VALUES
 ('20260827134500'),
 ('20260827112400'),
 ('20260827094700');
-
