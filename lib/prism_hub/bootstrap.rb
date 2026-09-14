@@ -12,6 +12,7 @@ module PrismHub
         request_body = Interfaces::Http::RequestBody.new(
           max_bytes: integer(env.fetch("PRISM_HUB_MAX_BODY_BYTES", "1048576"), "body limit")
         )
+        binding_repository = Adapters::ActiveRecordTelegramSurfaceBindingRepository.new
 
         list_channels = UseCases::ListChannels.new(channel_repository: channels)
         resolve_actor = UseCases::ResolveWorkspaceActor.new(
@@ -32,16 +33,12 @@ module PrismHub
           bot_instance_repository: Adapters::ActiveRecordBotInstanceRepository.new,
           clock: clock
         )
-        validate = execution_use_case(
-          "validate",
-          channels: channels,
-          gateway: gateway
+        bind_telegram_surface = UseCases::BindTelegramSurface.new(
+          resolve_workspace_actor: resolve_actor,
+          binding_repository: binding_repository
         )
-        publish = execution_use_case(
-          "publish",
-          channels: channels,
-          gateway: gateway
-        )
+        validate = execution_use_case("validate", channels: channels, gateway: gateway)
+        publish = execution_use_case("publish", channels: channels, gateway: gateway)
         credential_repository = Adapters::ActiveRecordClientCredentialRepository.new
         authenticator = Interfaces::Http::Authenticator.new(
           credential_repository: credential_repository,
@@ -66,21 +63,14 @@ module PrismHub
               resolve_workspace_actor: resolve_actor,
               request_body: request_body
             ),
-            ["POST", "/api/v1/bot-instances/personal/status"] => lifecycle_endpoint(
-              bot_lifecycle,
-              :status,
-              request_body
-            ),
-            ["POST", "/api/v1/bot-instances/personal/pause"] => lifecycle_endpoint(
-              bot_lifecycle,
-              :pause,
-              request_body
-            ),
-            ["POST", "/api/v1/bot-instances/personal/resume"] => lifecycle_endpoint(
-              bot_lifecycle,
-              :resume,
-              request_body
-            ),
+            ["POST", "/api/v1/bot-instances/personal/status"] => lifecycle_endpoint(bot_lifecycle, :status, request_body),
+            ["POST", "/api/v1/bot-instances/personal/pause"] => lifecycle_endpoint(bot_lifecycle, :pause, request_body),
+            ["POST", "/api/v1/bot-instances/personal/resume"] => lifecycle_endpoint(bot_lifecycle, :resume, request_body),
+            ["POST", "/api/v1/telegram/surfaces/bind"] =>
+              Interfaces::Http::TelegramSurfaceBindingEndpoint.new(
+                bind_telegram_surface: bind_telegram_surface,
+                request_body: request_body
+              ),
             ["GET", "/api/v1/channels"] => Interfaces::Http::ChannelsEndpoint.new(
               list_channels: list_channels,
               cursor: Interfaces::Http::ChannelCursor.new
@@ -107,20 +97,12 @@ module PrismHub
       private
 
       def lifecycle_endpoint(lifecycle, operation, request_body)
-        Interfaces::Http::PersonalBotLifecycleEndpoint.new(
-          lifecycle: lifecycle,
-          operation: operation,
-          request_body: request_body
-        )
+        Interfaces::Http::PersonalBotLifecycleEndpoint.new(lifecycle: lifecycle, operation: operation, request_body: request_body)
       end
 
       def legacy_authentication(env, channels)
-        enabled = boolean(
-          env.fetch("PRISM_HUB_LEGACY_TOKEN_ENABLED", "false"),
-          "legacy token flag"
-        )
+        enabled = boolean(env.fetch("PRISM_HUB_LEGACY_TOKEN_ENABLED", "false"), "legacy token flag")
         return {} unless enabled
-
         {
           legacy_token: env.fetch("PRISM_HUB_API_TOKEN"),
           legacy_context: Domain::AuthorisationContext.new(
@@ -135,71 +117,43 @@ module PrismHub
         runner = Adapters::ProcessRunner.new(
           command: command(env.fetch("PRISM_RUNTIME_COMMAND_JSON", '["prism-runtime","--json"]')),
           environment: {"RUST_LOG" => env.fetch("PRISM_RUNTIME_LOG", "warn")},
-          timeout_seconds: number(
-            env.fetch("PRISM_RUNTIME_TIMEOUT_SECONDS", "10"),
-            "runtime timeout"
-          )
+          timeout_seconds: number(env.fetch("PRISM_RUNTIME_TIMEOUT_SECONDS", "10"), "runtime timeout")
         )
         Adapters::SubprocessExecutionGateway.new(runner: runner, logger: logger)
       end
 
       def execution_use_case(operation, channels:, gateway:)
-        UseCases::ExecutePublication.new(
-          operation: operation,
-          channel_repository: channels,
-          execution_gateway: gateway
-        )
+        UseCases::ExecutePublication.new(operation: operation, channel_repository: channels, execution_gateway: gateway)
       end
 
       def command(source)
         value = JSON.parse(source)
-        if value.is_a?(Array) && value.any? && value.all? { |part| part.is_a?(String) && !part.empty? }
-          return value.freeze
-        end
-
-        raise ConfigurationError.new(
-          "hub.prism.command.invalid",
-          "PRISM_RUNTIME_COMMAND_JSON must be a non-empty JSON string array"
-        )
+        return value.freeze if value.is_a?(Array) && value.any? && value.all? { |part| part.is_a?(String) && !part.empty? }
+        raise ConfigurationError.new("hub.prism.command.invalid", "PRISM_RUNTIME_COMMAND_JSON must be a non-empty JSON string array")
       rescue JSON::ParserError
-        raise ConfigurationError.new(
-          "hub.prism.command.invalid_json",
-          "PRISM_RUNTIME_COMMAND_JSON must contain valid JSON"
-        )
+        raise ConfigurationError.new("hub.prism.command.invalid_json", "PRISM_RUNTIME_COMMAND_JSON must contain valid JSON")
       end
 
       def boolean(source, label)
         return true if source == "true"
         return false if source == "false"
-
-        raise ConfigurationError.new(
-          "hub.configuration.invalid_boolean",
-          "#{label} must be true or false"
-        )
+        raise ConfigurationError.new("hub.configuration.invalid_boolean", "#{label} must be true or false")
       end
 
       def integer(source, label)
         value = Integer(source, 10)
         return value if value.positive?
-
         raise ArgumentError
       rescue ArgumentError
-        raise ConfigurationError.new(
-          "hub.configuration.invalid_integer",
-          "#{label} must be a positive integer"
-        )
+        raise ConfigurationError.new("hub.configuration.invalid_integer", "#{label} must be a positive integer")
       end
 
       def number(source, label)
         value = Float(source)
         return value if value.positive?
-
         raise ArgumentError
       rescue ArgumentError
-        raise ConfigurationError.new(
-          "hub.configuration.invalid_number",
-          "#{label} must be a positive number"
-        )
+        raise ConfigurationError.new("hub.configuration.invalid_number", "#{label} must be a positive number")
       end
     end
   end
