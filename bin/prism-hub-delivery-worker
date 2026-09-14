@@ -20,9 +20,27 @@ begin
     origin: ENV.fetch("PRISM_BOT_ORIGIN"),
     secret: ENV.fetch("PRISM_BOT_DELIVERY_SECRET")
   )
+  porter_command = JSON.parse(ENV.fetch("PRISM_PORTER_COMMAND_JSON", '["prism-porter"]'))
+  unless porter_command.is_a?(Array) && porter_command.any? &&
+      porter_command.all? { |part| part.is_a?(String) && !part.empty? }
+    raise PrismHub::ConfigurationError.new(
+      "hub.porter.command.invalid",
+      "porter command must be a non-empty JSON string array"
+    )
+  end
+  porter_timeout_seconds = Float(ENV.fetch("PRISM_PORTER_TIMEOUT_SECONDS", "10"))
+  raise ArgumentError unless porter_timeout_seconds.positive?
+
   dispatch_delivery = PrismHub::UseCases::DispatchDelivery.new(
     surface_resolver: surface_resolver,
-    delivery_gateway: delivery_gateway
+    delivery_gateway: delivery_gateway,
+    build_delivery_intent: PrismHub::UseCases::BuildDeliveryIntent.new(
+      porter_gateway: PrismHub::Adapters::SubprocessPorterGateway.new(
+        command: porter_command,
+        logger: Logger.new($stderr),
+        timeout_seconds: porter_timeout_seconds
+      )
+    )
   )
   outbox_repository = PrismHub::Adapters::ActiveRecordDeliveryOutboxRepository.new
   processor = PrismHub::UseCases::ProcessDeliveryOutbox.new(

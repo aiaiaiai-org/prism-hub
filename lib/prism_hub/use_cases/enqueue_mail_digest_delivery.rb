@@ -6,19 +6,22 @@ module PrismHub
     class EnqueueMailDigestDelivery
       ARTIFACT_KIND = "mail.digest".freeze
 
-      def initialize(generate_mail_digest:, generate_mail_digests:, build_delivery_intent:, outbox_repository:, clock: -> { Time.now.utc })
+      def initialize(generate_mail_digest:, generate_mail_digests:, outbox_repository:, clock: -> { Time.now.utc })
         @generate_mail_digest = generate_mail_digest
         @generate_mail_digests = generate_mail_digests
-        @build_delivery_intent = build_delivery_intent
         @outbox_repository = outbox_repository
         @clock = clock
       end
 
+      # chunk_max_chars is an operator ceiling, not the split itself. The split is
+      # computed at dispatch from the targets that will receive the message, and
+      # this value can only lower that result.
       def call(since:, before:, workspace:, channel:, mailbox_id: nil, chunk_max_chars: nil)
         artifact = generate_artifact(since: since, before: before, mailbox_id: mailbox_id)
-        intent = @build_delivery_intent.call(
+        reference = artifact_id(artifact)
+        request = Domain::DeliveryRequest.new(
           artifact: {
-            "artifact_id" => artifact_id(artifact),
+            "artifact_id" => reference,
             "artifact_kind" => ARTIFACT_KIND,
             "payload" => artifact
           },
@@ -28,9 +31,12 @@ module PrismHub
               "logical_context" => {"workspace" => workspace, "channel" => channel}
             }
           ],
-          chunk_max_chars: chunk_max_chars
+          workspace: workspace,
+          channel: channel,
+          idempotency_key: Digest::SHA256.hexdigest(reference),
+          chunk_max_chars_limit: chunk_max_chars
         )
-        @outbox_repository.enqueue(intent: intent, available_at: @clock.call.utc)
+        @outbox_repository.enqueue(request: request, available_at: @clock.call.utc)
       end
 
       private

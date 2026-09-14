@@ -9,21 +9,21 @@ module PrismHub
       STATUS_DELIVERED = "delivered".freeze
       STATUS_FAILED = "failed".freeze
 
-      def enqueue(intent:, available_at:)
-        validate_intent!(intent)
+      def enqueue(request:, available_at:)
+        validate_request!(request)
         timestamp = normalized_time(available_at, "available_at")
         record = ActiveRecordRecords::DeliveryOutboxEntry.create!(
-          workspace: intent.workspace,
-          logical_channel: intent.channel,
-          idempotency_key: intent.idempotency_key,
-          intent_payload: intent.to_h,
+          workspace: request.workspace,
+          logical_channel: request.channel,
+          idempotency_key: request.idempotency_key,
+          intent_payload: request.to_h,
           status: STATUS_PENDING,
           attempts: 0,
           available_at: timestamp
         )
         to_domain(record)
       rescue ::ActiveRecord::RecordNotUnique
-        existing = ActiveRecordRecords::DeliveryOutboxEntry.find_by!(idempotency_key: intent.idempotency_key)
+        existing = ActiveRecordRecords::DeliveryOutboxEntry.find_by!(idempotency_key: request.idempotency_key)
         to_domain(existing)
       end
 
@@ -90,9 +90,9 @@ module PrismHub
 
       private
 
-      def validate_intent!(intent)
-        return if intent.is_a?(Domain::DeliveryIntent)
-        raise InputError.new("hub.delivery_outbox.intent.invalid", "outbox enqueue requires a DeliveryIntent")
+      def validate_request!(request)
+        return if request.is_a?(Domain::DeliveryRequest)
+        raise InputError.new("hub.delivery_outbox.request.invalid", "outbox enqueue requires a DeliveryRequest")
       end
 
       def locked_record!(id, lock_token)

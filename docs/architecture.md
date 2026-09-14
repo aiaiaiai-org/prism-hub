@@ -99,6 +99,16 @@ A delivery intent contains the artifact identity, logical `workspace` and
 Hub independently verifies the artifact identity, logical context, chunk
 sequence, and idempotency fingerprint before accepting the worker response.
 
+Porter runs at dispatch rather than at enqueue, because the number of characters
+one message may carry is a property of the surface that receives it. The outbox
+therefore holds a `prism-hub.delivery-request.v1` envelope — artifact plus routes,
+not yet split — and `DispatchDelivery` resolves the surface, derives the bound from
+the targets, and only then renders. With several targets on one logical channel the
+smallest limit wins: a split that fits the narrowest surface fits every other, while
+a split sized for the widest cannot be delivered to the rest. An operator ceiling
+(`PRISM_PORTER_CHUNK_MAX_CHARS`) may only lower that result, never raise it past what
+a surface accepts.
+
 Porter never receives Telegram chat IDs, topic IDs, bot tokens, or provider
 credentials. Concrete transport coordinates remain Hub-owned state. Resolving a
 logical context to a persisted Telegram surface binding and dispatching the
