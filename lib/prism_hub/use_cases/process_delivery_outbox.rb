@@ -18,12 +18,12 @@ module PrismHub
       def call(limit:, lease_seconds:)
         now = @clock.call.utc
         entries = @outbox_repository.claim_due(limit: limit, now: now, lease_seconds: lease_seconds)
-        entries.map { |entry| process(entry, now: now) }.freeze
+        entries.map { |entry| process(entry) }.freeze
       end
 
       private
 
-      def process(entry, now:)
+      def process(entry)
         intent = Domain::DeliveryIntent.from_h(entry.intent_payload)
         @dispatch_delivery.call(intent: intent)
         @outbox_repository.mark_delivered(
@@ -59,7 +59,7 @@ module PrismHub
       end
 
       def retry_delay(error)
-        return @rate_limit_retry_seconds unless error.code == "hub.bot.delivery.rate_limited"
+        return @retry_seconds unless error.code == "hub.bot.delivery.rate_limited"
         value = error.details&.fetch("retry_after_seconds", nil)
         seconds = Integer(value)
         return seconds if seconds.positive?
