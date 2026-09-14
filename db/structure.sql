@@ -18,7 +18,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public;
 
 
 --
--- Name: EXTENSION pgcrypto; Type: COMMENT; Schema: public; Owner: -
+-- Name: EXTENSION pgcrypto; Type: COMMENT; Schema: -; Owner: -
 --
 
 COMMENT ON EXTENSION pgcrypto IS 'cryptographic functions';
@@ -926,6 +926,7 @@ ALTER TABLE ONLY public.social_account_accesses
     ADD CONSTRAINT fk_rails_ea248aecc3 FOREIGN KEY (social_account_id) REFERENCES public.social_accounts(id) ON DELETE RESTRICT;
 
 
+--
 -- PostgreSQL database dump complete
 --
 
