@@ -44,17 +44,26 @@ module PrismHub
 
       class ClientCredential < ::ActiveRecord::Base
         self.table_name = "client_credentials"
-        belongs_to :service_principal, class_name: "PrismHub::Adapters::ActiveRecordRecords::ServicePrincipal", inverse_of: :client_credentials
+
+        belongs_to :service_principal,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::ServicePrincipal",
+          inverse_of: :client_credentials
       end
 
       class CapabilityGrant < ::ActiveRecord::Base
         self.table_name = "capability_grants"
-        belongs_to :service_principal, class_name: "PrismHub::Adapters::ActiveRecordRecords::ServicePrincipal", inverse_of: :capability_grants
+
+        belongs_to :service_principal,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::ServicePrincipal",
+          inverse_of: :capability_grants
       end
 
       class ChannelGrant < ::ActiveRecord::Base
         self.table_name = "channel_grants"
-        belongs_to :service_principal, class_name: "PrismHub::Adapters::ActiveRecordRecords::ServicePrincipal", inverse_of: :channel_grants
+
+        belongs_to :service_principal,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::ServicePrincipal",
+          inverse_of: :channel_grants
       end
 
       class MailProviderCredential < ::ActiveRecord::Base
@@ -76,7 +85,8 @@ module PrismHub
           class_name: "PrismHub::Adapters::ActiveRecordRecords::SocialAccountAccess",
           inverse_of: :user_identity,
           dependent: :restrict_with_exception
-        has_many :social_accounts, through: :social_account_accesses
+        has_many :social_accounts,
+          through: :social_account_accesses
         has_many :bot_instance_lifecycle_events,
           class_name: "PrismHub::Adapters::ActiveRecordRecords::BotInstanceLifecycleEvent",
           foreign_key: :actor_user_identity_id,
@@ -96,47 +106,91 @@ module PrismHub
 
       class ProviderIdentityBinding < ::ActiveRecord::Base
         self.table_name = "provider_identity_bindings"
-        belongs_to :user_identity, class_name: "PrismHub::Adapters::ActiveRecordRecords::UserIdentity", inverse_of: :provider_identity_bindings
+
+        belongs_to :user_identity,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::UserIdentity",
+          inverse_of: :provider_identity_bindings
       end
 
       class SocialAccount < ::ActiveRecord::Base
         self.table_name = "social_accounts"
-        has_many :social_account_accesses, class_name: "PrismHub::Adapters::ActiveRecordRecords::SocialAccountAccess", inverse_of: :social_account, dependent: :restrict_with_exception
-        has_many :user_identities, through: :social_account_accesses
+
+        has_many :social_account_accesses,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::SocialAccountAccess",
+          inverse_of: :social_account,
+          dependent: :restrict_with_exception
+        has_many :user_identities,
+          through: :social_account_accesses
       end
 
       class SocialAccountAccess < ::ActiveRecord::Base
         self.table_name = "social_account_accesses"
-        belongs_to :social_account, class_name: "PrismHub::Adapters::ActiveRecordRecords::SocialAccount", inverse_of: :social_account_accesses
-        belongs_to :user_identity, class_name: "PrismHub::Adapters::ActiveRecordRecords::UserIdentity", inverse_of: :social_account_accesses
+
+        belongs_to :social_account,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::SocialAccount",
+          inverse_of: :social_account_accesses
+        belongs_to :user_identity,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::UserIdentity",
+          inverse_of: :social_account_accesses
       end
 
       class WorkspaceMembership < ::ActiveRecord::Base
         self.table_name = "workspace_memberships"
-        belongs_to :workspace, class_name: "PrismHub::Adapters::ActiveRecordRecords::Workspace", inverse_of: :workspace_memberships
-        belongs_to :user_identity, class_name: "PrismHub::Adapters::ActiveRecordRecords::UserIdentity", inverse_of: :workspace_memberships
+
+        belongs_to :workspace,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::Workspace",
+          inverse_of: :workspace_memberships
+        belongs_to :user_identity,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::UserIdentity",
+          inverse_of: :workspace_memberships
       end
 
       class BotInstance < ::ActiveRecord::Base
         self.table_name = "bot_instances"
-        belongs_to :service_principal, class_name: "PrismHub::Adapters::ActiveRecordRecords::ServicePrincipal", inverse_of: :bot_instances
-        belongs_to :workspace, class_name: "PrismHub::Adapters::ActiveRecordRecords::Workspace", inverse_of: :bot_instances
-        has_many :lifecycle_events, class_name: "PrismHub::Adapters::ActiveRecordRecords::BotInstanceLifecycleEvent", inverse_of: :bot_instance, dependent: :restrict_with_exception
-        has_many :telegram_surface_bindings, class_name: "PrismHub::Adapters::ActiveRecordRecords::TelegramSurfaceBinding", inverse_of: :bot_instance, dependent: :restrict_with_exception
+
+        belongs_to :service_principal,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::ServicePrincipal",
+          inverse_of: :bot_instances
+        belongs_to :workspace,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::Workspace",
+          inverse_of: :bot_instances
+        has_many :lifecycle_events,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::BotInstanceLifecycleEvent",
+          inverse_of: :bot_instance,
+          dependent: :restrict_with_exception
+        has_many :telegram_surface_bindings,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::TelegramSurfaceBinding",
+          inverse_of: :bot_instance,
+          dependent: :restrict_with_exception
       end
 
       class BotInstanceLifecycleEvent < ::ActiveRecord::Base
         self.table_name = "bot_instance_lifecycle_events"
-        belongs_to :bot_instance, class_name: "PrismHub::Adapters::ActiveRecordRecords::BotInstance", inverse_of: :lifecycle_events
-        belongs_to :actor_user_identity, class_name: "PrismHub::Adapters::ActiveRecordRecords::UserIdentity", inverse_of: :bot_instance_lifecycle_events
+
+        belongs_to :bot_instance,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::BotInstance",
+          inverse_of: :lifecycle_events
+        belongs_to :actor_user_identity,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::UserIdentity",
+          inverse_of: :bot_instance_lifecycle_events
       end
 
       class TelegramSurfaceBinding < ::ActiveRecord::Base
         self.table_name = "telegram_surface_bindings"
-        belongs_to :workspace, class_name: "PrismHub::Adapters::ActiveRecordRecords::Workspace", inverse_of: :telegram_surface_bindings
-        belongs_to :bot_instance, class_name: "PrismHub::Adapters::ActiveRecordRecords::BotInstance", inverse_of: :telegram_surface_bindings
-        belongs_to :created_by_user_identity, class_name: "PrismHub::Adapters::ActiveRecordRecords::UserIdentity", inverse_of: :created_telegram_surface_bindings
-        belongs_to :revoked_by_user_identity, class_name: "PrismHub::Adapters::ActiveRecordRecords::UserIdentity", inverse_of: :revoked_telegram_surface_bindings, optional: true
+
+        belongs_to :workspace,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::Workspace",
+          inverse_of: :telegram_surface_bindings
+        belongs_to :bot_instance,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::BotInstance",
+          inverse_of: :telegram_surface_bindings
+        belongs_to :created_by_user_identity,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::UserIdentity",
+          inverse_of: :created_telegram_surface_bindings
+        belongs_to :revoked_by_user_identity,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::UserIdentity",
+          inverse_of: :revoked_telegram_surface_bindings,
+          optional: true
       end
 
       class DeliveryOutboxEntry < ::ActiveRecord::Base
