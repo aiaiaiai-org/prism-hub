@@ -17,7 +17,7 @@ class MailDigestSchedulerTest < Minitest::Test
 
     scheduler.run_once
 
-    assert_equal [["bin/prism-hub-enqueue-mail-digest",], calls.first]
+    assert_equal [["bin/prism-hub-enqueue-mail-digest"], calls.first]
     assert_equal "2026-09-14T04:30:00Z", calls.first[1].fetch("PRISM_MAIL_SINCE")
     assert_equal "2026-09-14T05:00:00Z", calls.first[1].fetch("PRISM_MAIL_BEFORE")
   end
