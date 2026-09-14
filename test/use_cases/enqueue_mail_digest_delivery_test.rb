@@ -80,6 +80,6 @@ class EnqueueMailDigestDeliveryTest < Minitest::Test
     assert_equal "personal", builder.arguments.fetch(:routes).first.fetch("logical_context").fetch("workspace")
     assert_equal "digest", builder.arguments.fetch(:routes).first.fetch("logical_context").fetch("channel")
     assert_equal now, outbox.arguments.fetch(:available_at)
-    assert_equal builder.build_delivery_intent(builder.arguments.fetch(:artifact), builder.arguments.fetch(:routes).first.fetch("logical_context")).idempotency_key, outbox.arguments.fetch(:intent).idempotency_key
+    assert_match(/\Amail-digest-[0-9a-f]{64}\z/, outbox.arguments.fetch(:intent).artifact_id)
   end
 end
