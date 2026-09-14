@@ -1,0 +1,96 @@
+#!/usr/bin/env ruby
+# © 2026 aiaiaiai · aiaiaiai.org
+# SPDX-License-Identifier: Apache-2.0
+
+ENV["RAILS_ENV"] ||= "production"
+require_relative "../config/environment"
+
+begin
+  origin = ENV.fetch("HQBASE_ORIGIN")
+  resource = "#{origin}/api/v1"
+  mail_command = JSON.parse(ENV.fetch("PRISM_MAIL_COMMAND_JSON", '["prism-mail"]'))
+  porter_command = JSON.parse(ENV.fetch("PRISM_PORTER_COMMAND_JSON", '["prism-porter"]'))
+  commands = {"mail" => mail_command, "porter" => porter_command}
+  commands.each do |name, command|
+    unless command.is_a?(Array) && command.any? && command.all? { |part| part.is_a?(String) && !part.empty? }
+      raise PrismHub::ConfigurationError.new(
+        "hub.#{name}.command.invalid",
+        "#{name} command must be a non-empty JSON string array"
+      )
+    end
+  end
+
+  mail_timeout_seconds = Float(ENV.fetch("PRISM_MAIL_TIMEOUT_SECONDS", "30"))
+  porter_timeout_seconds = Float(ENV.fetch("PRISM_PORTER_TIMEOUT_SECONDS", "10"))
+  unless mail_timeout_seconds.positive? && porter_timeout_seconds.positive?
+    raise PrismHub::ConfigurationError.new(
+      "hub.worker.timeout.invalid",
+      "mail and porter timeouts must be positive numbers"
+    )
+  end
+
+  cipher = PrismHub::Adapters::ProviderTokenCipher.new(key_base64: ENV.fetch("PRISM_HUB_PROVIDER_TOKEN"))
+  repository = PrismHub::Adapters::ActiveRecordMailCredentialRepository.new(cipher: cipher)
+  oauth_gateway = PrismHub::Adapters::HqbaseDeviceOauthGateway.new(origin: origin)
+  credential_resolver = PrismHub::UseCases::ResolveMailCredential.new(
+    credential_repository: repository,
+    oauth_gateway: oauth_gateway,
+    provider: "hqbase",
+    origin: origin,
+    resource: resource
+  )
+  generate = PrismHub::UseCases::GenerateMailDigest.new(
+    credential_resolver: credential_resolver,
+    execution_gateway: PrismHub::Adapters::SubprocessMailExecutionGateway.new(
+      command: mail_command,
+      origin: origin,
+      logger: Logger.new($stderr),
+      timeout_seconds: mail_timeout_seconds
+    )
+  )
+  list_mailboxes = PrismHub::UseCases::ListMailboxes.new(
+    credential_resolver: credential_resolver,
+    mailbox_gateway: PrismHub::Adapters::HqbaseMailboxGateway.new(origin: origin)
+  )
+  generate_all = PrismHub::UseCases::GenerateMailDigests.new(
+    list_mailboxes: list_mailboxes,
+    generate_mail_digest: generate
+  )
+  porter = PrismHub::UseCases::BuildDeliveryIntent.new(
+    porter_gateway: PrismHub::Adapters::SubprocessPorterGateway.new(
+      command: porter_command,
+      logger: Logger.new($stderr),
+      timeout_seconds: porter_timeout_seconds
+    )
+  )
+  use_case = PrismHub::UseCases::EnqueueMailDigestDelivery.new(
+    generate_mail_digest: generate,
+    generate_mail_digests: generate_all,
+    build_delivery_intent: porter,
+    outbox_repository: PrismHub::Adapters::ActiveRecordDeliveryOutboxRepository.new
+  )
+
+  mailbox_id = ENV["PRISM_MAIL_MAILBOX_ID"]
+  mailbox_id = nil if mailbox_id&.empty?
+  entry = use_case.call(
+    since: ENV.fetch("PRISM_MAIL_SINCE"),
+    before: ENV.fetch("PRISM_MAIL_BEFORE"),
+    workspace: ENV.fetch("PRISM_DELIVERY_WORKSPACE", "personal"),
+    channel: ENV.fetch("PRISM_DELIVERY_CHANNEL", "digest"),
+    mailbox_id: mailbox_id,
+    chunk_max_chars: ENV["PRISM_PORTER_CHUNK_MAX_CHARS"]&.then { Integer(_1, 10) }
+  )
+  puts(JSON.generate(outbox_entry: entry.to_h))
+rescue JSON::ParserError
+  warn(JSON.generate(error: {code: "hub.command.invalid_json"}))
+  exit 1
+rescue ArgumentError
+  warn(JSON.generate(error: {code: "hub.command.invalid"}))
+  exit 1
+rescue KeyError => error
+  warn(JSON.generate(error: {code: "hub.configuration.missing", key: error.key}))
+  exit 1
+rescue PrismHub::Error => error
+  warn(JSON.generate(error: {code: error.code, details: error.details}))
+  exit 1
+end
