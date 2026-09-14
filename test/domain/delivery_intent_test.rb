@@ -18,6 +18,23 @@ class DeliveryIntentTest < Minitest::Test
     assert intent.chunks.all?(&:frozen?)
   end
 
+  def test_round_trips_through_versioned_payload
+    intent = build_intent
+
+    restored = PrismHub::Domain::DeliveryIntent.from_h(intent.to_h)
+
+    assert_equal intent.to_h, restored.to_h
+    assert_equal intent.idempotency_key, restored.idempotency_key
+  end
+
+  def test_rejects_unsupported_schema
+    error = assert_raises(PrismHub::InputError) do
+      PrismHub::Domain::DeliveryIntent.from_h("schema_version" => "prism-porter.delivery-intent.v2")
+    end
+
+    assert_equal "hub.porter.delivery_intent.payload.invalid", error.code
+  end
+
   def test_rejects_non_sequential_chunks
     error = assert_raises(PrismHub::InputError) do
       build_intent(
