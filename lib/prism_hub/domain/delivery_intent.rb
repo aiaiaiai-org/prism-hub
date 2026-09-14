@@ -18,6 +18,40 @@ module PrismHub
 
       attr_reader :artifact_id, :artifact_kind, :workspace, :channel, :format, :chunks, :idempotency_key
 
+      def self.from_h(value)
+        unless value.is_a?(Hash) && value["schema_version"] == SCHEMA_VERSION
+          raise InputError.new(
+            "hub.porter.delivery_intent.payload.invalid",
+            "delivery intent payload schema is unsupported"
+          )
+        end
+
+        context = value.fetch("logical_context")
+        presentation = value.fetch("presentation")
+        chunks = value.fetch("chunks")
+        unless context.is_a?(Hash) && presentation.is_a?(Hash) && chunks.is_a?(Array)
+          raise InputError.new(
+            "hub.porter.delivery_intent.payload.invalid",
+            "delivery intent payload shape is invalid"
+          )
+        end
+
+        new(
+          artifact_id: value.fetch("artifact_id"),
+          artifact_kind: value.fetch("artifact_kind"),
+          workspace: context.fetch("workspace"),
+          channel: context.fetch("channel"),
+          format: presentation.fetch("format"),
+          chunks: chunks,
+          idempotency_key: value.fetch("idempotency_key")
+        )
+      rescue KeyError, TypeError
+        raise InputError.new(
+          "hub.porter.delivery_intent.payload.invalid",
+          "delivery intent payload is incomplete"
+        )
+      end
+
       def initialize(artifact_id:, artifact_kind:, workspace:, channel:, format:, chunks:, idempotency_key:)
         @artifact_id = identifier(artifact_id, "artifact_id", ARTIFACT_ID_PATTERN)
         @artifact_kind = identifier(artifact_kind, "artifact_kind", ARTIFACT_KIND_PATTERN)
