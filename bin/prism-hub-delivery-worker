@@ -1,0 +1,47 @@
+#!/usr/bin/env ruby
+# © 2026 aiaiaiai · aiaiaiai.org
+# SPDX-License-Identifier: Apache-2.0
+
+ENV["RAILS_ENV"] ||= "production"
+require_relative "../config/environment"
+
+begin
+  batch_size = Integer(ENV.fetch("PRISM_DELIVERY_WORKER_BATCH_SIZE", "10"), 10)
+  lease_seconds = Integer(ENV.fetch("PRISM_DELIVERY_WORKER_LEASE_SECONDS", "300"), 10)
+  poll_seconds = Float(ENV.fetch("PRISM_DELIVERY_WORKER_POLL_SECONDS", "5"))
+  oneshot = ENV.fetch("PRISM_DELIVERY_WORKER_ONESHOT", "false") == "true"
+  raise ArgumentError unless batch_size.positive? && lease_seconds.positive? && poll_seconds.positive?
+
+  binding_repository = PrismHub::Adapters::ActiveRecordTelegramSurfaceBindingRepository.new
+  surface_resolver = PrismHub::UseCases::ResolveTelegramSurface.new(
+    binding_repository: binding_repository
+  )
+  delivery_gateway = PrismHub::Adapters::HttpBotDeliveryGateway.new(
+    origin: ENV.fetch("PRISM_BOT_ORIGIN"),
+    secret: ENV.fetch("PRISM_BOT_DELIVERY_SECRET")
+  )
+  dispatch_delivery = PrismHub::UseCases::DispatchDelivery.new(
+    surface_resolver: surface_resolver,
+    delivery_gateway: delivery_gateway
+  )
+  outbox_repository = PrismHub::Adapters::ActiveRecordDeliveryOutboxRepository.new
+  processor = PrismHub::UseCases::ProcessDeliveryOutbox.new(
+    outbox_repository: outbox_repository,
+    dispatch_delivery: dispatch_delivery
+  )
+
+  loop do
+    processor.call(limit: batch_size, lease_seconds: lease_seconds)
+    break if oneshot
+    sleep(poll_seconds)
+  end
+rescue ArgumentError
+  warn(JSON.generate(error: {code: "hub.delivery.worker.configuration.invalid"}))
+  exit 1
+rescue KeyError => error
+  warn(JSON.generate(error: {code: "hub.configuration.missing", key: error.key}))
+  exit 1
+rescue PrismHub::Error => error
+  warn(JSON.generate(error: {code: error.code, details: error.details}))
+  exit 1
+end
