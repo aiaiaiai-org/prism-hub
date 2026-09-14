@@ -333,7 +333,7 @@ CREATE TABLE public.telegram_surface_bindings (
     CONSTRAINT telegram_surface_bindings_chat_id_check CHECK ((chat_id <> 0)),
     CONSTRAINT telegram_surface_bindings_logical_channel_check CHECK (((char_length(btrim((logical_channel)::text)) >= 1) AND (char_length(btrim((logical_channel)::text)) <= 100))),
     CONSTRAINT telegram_surface_bindings_state_check CHECK (((((status)::text = 'active'::text) AND (revoked_at IS NULL) AND (revoked_by_user_identity_id IS NULL)) OR (((status)::text = 'revoked'::text) AND (revoked_at IS NOT NULL) AND (revoked_by_user_identity_id IS NOT NULL)))),
-    CONSTRAINT telegram_surface_bindings_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'revoked'::character varying])::text[]))),
+    CONSTRAINT telegram_surface_bindings_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('revoked'::character varying)::text]))),
     CONSTRAINT telegram_surface_bindings_thread_id_check CHECK (((message_thread_id IS NULL) OR (message_thread_id > 0)))
 );
 
@@ -627,13 +627,6 @@ CREATE INDEX index_bot_instance_lifecycle_events_on_bot_instance_id ON public.bo
 --
 
 CREATE INDEX index_bot_instances_on_service_principal_id ON public.bot_instances USING btree (service_principal_id);
-
-
---
--- Name: index_bot_instances_on_workspace_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_bot_instances_on_workspace_id ON public.bot_instances USING btree (service_principal_id);
 
 
 --
