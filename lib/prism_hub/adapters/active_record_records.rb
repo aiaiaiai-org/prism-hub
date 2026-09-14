@@ -1,4 +1,5 @@
 # © 2026 aiaiaiai · aiaiaiai.org
+# SPDX-License-Identifier: Apache-2.0
 
 module PrismHub
   module Adapters
@@ -190,6 +191,10 @@ module PrismHub
           class_name: "PrismHub::Adapters::ActiveRecordRecords::UserIdentity",
           inverse_of: :revoked_telegram_surface_bindings,
           optional: true
+      end
+
+      class DeliveryOutboxEntry < ::ActiveRecord::Base
+        self.table_name = "delivery_outbox_entries"
       end
     end
   end

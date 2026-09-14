@@ -165,6 +165,37 @@ CREATE TABLE public.client_credentials (
 
 
 --
+-- Name: delivery_outbox_entries; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.delivery_outbox_entries (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    workspace character varying(100) NOT NULL,
+    logical_channel character varying(100) NOT NULL,
+    idempotency_key character varying(64) NOT NULL,
+    intent_payload jsonb NOT NULL,
+    status character varying(16) DEFAULT 'pending'::character varying NOT NULL,
+    attempts integer DEFAULT 0 NOT NULL,
+    available_at timestamp(6) without time zone NOT NULL,
+    locked_at timestamp(6) without time zone,
+    lock_token character varying(64),
+    delivered_at timestamp(6) without time zone,
+    failed_at timestamp(6) without time zone,
+    last_error_code character varying(160),
+    last_error_details jsonb,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL,
+    CONSTRAINT delivery_outbox_entries_attempts_check CHECK ((attempts >= 0)),
+    CONSTRAINT delivery_outbox_entries_channel_check CHECK (((char_length(btrim((logical_channel)::text)) >= 1) AND (char_length(btrim((logical_channel)::text)) <= 100))),
+    CONSTRAINT delivery_outbox_entries_delivered_at_check CHECK (((((status)::text = 'delivered'::text) AND (delivered_at IS NOT NULL)) OR ((status)::text <> 'delivered'::text))),
+    CONSTRAINT delivery_outbox_entries_idempotency_key_check CHECK (((idempotency_key)::text ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT delivery_outbox_entries_processing_lock_check CHECK (((((status)::text = 'processing'::text) AND (locked_at IS NOT NULL) AND (lock_token IS NOT NULL)) OR ((status)::text <> 'processing'::text))),
+    CONSTRAINT delivery_outbox_entries_status_check CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'processing'::character varying, 'delivered'::character varying, 'failed'::character varying])::text[]))),
+    CONSTRAINT delivery_outbox_entries_workspace_check CHECK (((char_length(btrim((workspace)::text)) >= 1) AND (char_length(btrim((workspace)::text)) <= 100)))
+);
+
+
+--
 -- Name: mail_provider_credentials; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -302,7 +333,7 @@ CREATE TABLE public.telegram_surface_bindings (
     CONSTRAINT telegram_surface_bindings_chat_id_check CHECK ((chat_id <> 0)),
     CONSTRAINT telegram_surface_bindings_logical_channel_check CHECK (((char_length(btrim((logical_channel)::text)) >= 1) AND (char_length(btrim((logical_channel)::text)) <= 100))),
     CONSTRAINT telegram_surface_bindings_state_check CHECK (((((status)::text = 'active'::text) AND (revoked_at IS NULL) AND (revoked_by_user_identity_id IS NULL)) OR (((status)::text = 'revoked'::text) AND (revoked_at IS NOT NULL) AND (revoked_by_user_identity_id IS NOT NULL)))),
-    CONSTRAINT telegram_surface_bindings_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'revoked'::character varying])::text[]))),
+    CONSTRAINT telegram_surface_bindings_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('revoked'::character varying)::text]))),
     CONSTRAINT telegram_surface_bindings_thread_id_check CHECK (((message_thread_id IS NULL) OR (message_thread_id > 0)))
 );
 
@@ -406,6 +437,14 @@ ALTER TABLE ONLY public.client_credentials
 
 
 --
+-- Name: delivery_outbox_entries delivery_outbox_entries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.delivery_outbox_entries
+    ADD CONSTRAINT delivery_outbox_entries_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: mail_provider_credentials mail_provider_credentials_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -497,6 +536,20 @@ CREATE INDEX idx_bot_instance_events_instance_time ON public.bot_instance_lifecy
 --
 
 CREATE UNIQUE INDEX idx_bot_instances_principal_workspace ON public.bot_instances USING btree (service_principal_id, workspace_id);
+
+
+--
+-- Name: idx_delivery_outbox_due; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_delivery_outbox_due ON public.delivery_outbox_entries USING btree (status, available_at);
+
+
+--
+-- Name: idx_delivery_outbox_lock_token; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_delivery_outbox_lock_token ON public.delivery_outbox_entries USING btree (lock_token) WHERE (lock_token IS NOT NULL);
 
 
 --
@@ -623,6 +676,13 @@ CREATE INDEX index_client_credentials_on_service_principal_id ON public.client_c
 --
 
 CREATE UNIQUE INDEX index_client_credentials_on_token_digest ON public.client_credentials USING btree (token_digest);
+
+
+--
+-- Name: index_delivery_outbox_entries_on_idempotency_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_delivery_outbox_entries_on_idempotency_key ON public.delivery_outbox_entries USING btree (idempotency_key);
 
 
 --
@@ -873,6 +933,7 @@ ALTER TABLE ONLY public.social_account_accesses
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260914020000'),
 ('20260913080000'),
 ('20260911203000'),
 ('20260911183000'),
