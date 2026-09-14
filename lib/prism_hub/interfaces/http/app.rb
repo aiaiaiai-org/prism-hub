@@ -15,6 +15,7 @@ module PrismHub
           /api/v1/channels
           /api/v1/publications
           /api/v1/publications/validate
+          /api/v1/telegram/surfaces/bind
         ].freeze
 
         def initialize(authenticator:, health_endpoint:, routes:, logger:, request_id_factory:)
@@ -44,46 +45,20 @@ module PrismHub
           return endpoint.call(request, authorisation_context: authorisation_context) if endpoint
           return method_not_allowed(request_id) if API_PATHS.include?(request.path_info)
 
-          JsonResponse.error(
-            404,
-            "hub.http.not_found",
-            "endpoint not found",
-            request_id: request_id
-          )
+          JsonResponse.error(404, "hub.http.not_found", "endpoint not found", request_id: request_id)
         rescue AuthorisationError => error
-          JsonResponse.error(
-            403,
-            error.code,
-            error.message,
-            details: error.details,
-            request_id: request_id
-          )
+          JsonResponse.error(403, error.code, error.message, details: error.details, request_id: request_id)
         rescue InputError, UnknownChannelError => error
-          JsonResponse.error(
-            input_status(error),
-            error.code,
-            error.message,
-            details: error.details,
-            request_id: request_id
-          )
-        rescue BotInstanceConflictError => error
-          JsonResponse.error(
-            409,
-            error.code,
-            error.message,
-            details: error.details,
-            request_id: request_id
-          )
+          JsonResponse.error(input_status(error), error.code, error.message, details: error.details, request_id: request_id)
+        rescue BotInstanceConflictError, TelegramSurfaceBindingConflictError => error
+          JsonResponse.error(409, error.code, error.message, details: error.details, request_id: request_id)
+        rescue TelegramSurfaceBindingNotFoundError => error
+          JsonResponse.error(404, error.code, error.message, details: error.details, request_id: request_id)
         rescue ExecutionUnavailableError => error
           JsonResponse.error(503, error.code, error.message, request_id: request_id)
         rescue StandardError => error
           @logger.error("hub_request_failed request_id=#{request_id} error_class=#{error.class.name}")
-          JsonResponse.error(
-            500,
-            "hub.internal",
-            "an unexpected internal error occurred",
-            request_id: request_id
-          )
+          JsonResponse.error(500, "hub.internal", "an unexpected internal error occurred", request_id: request_id)
         end
 
         def health_request?(request)
@@ -91,21 +66,11 @@ module PrismHub
         end
 
         def unauthorized(request_id)
-          JsonResponse.error(
-            401,
-            "hub.authorization.required",
-            "a valid Hub bearer credential is required",
-            request_id: request_id
-          )
+          JsonResponse.error(401, "hub.authorization.required", "a valid Hub bearer credential is required", request_id: request_id)
         end
 
         def method_not_allowed(request_id)
-          JsonResponse.error(
-            405,
-            "hub.http.method_not_allowed",
-            "HTTP method is not supported for this endpoint",
-            request_id: request_id
-          )
+          JsonResponse.error(405, "hub.http.method_not_allowed", "HTTP method is not supported for this endpoint", request_id: request_id)
         end
 
         def with_request_id(response, request_id)
@@ -117,7 +82,7 @@ module PrismHub
           case error.code
           when "hub.http.body.invalid_json", "hub.actor.request.invalid", "hub.actor.workspace_id.invalid",
             "hub.actor_onboarding.request.invalid", "hub.personal_actor.request.invalid",
-            "hub.bot_instance.request.invalid"
+            "hub.bot_instance.request.invalid", "hub.telegram_surface_binding.request.invalid"
             400
           when /^hub\.provider_subject\./
             400
