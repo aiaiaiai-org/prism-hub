@@ -23,6 +23,22 @@ class DeliveryRequestTest < Minitest::Test
     assert request.routes.frozen?
   end
 
+  def test_nested_structures_cannot_be_rewritten_after_construction
+    request = build(
+      artifact: {"artifact_id" => "artifact-1", "artifact_kind" => "mail.digest",
+                 "payload" => {"entries" => [{"subject" => "one"}], "window" => {"since" => "a"}}}
+    )
+
+    assert_raises(FrozenError) { request.artifact["payload"]["window"]["since"] = "b" }
+    assert_raises(FrozenError) { request.artifact["payload"]["entries"] << {} }
+    assert_raises(FrozenError) { request.artifact["payload"]["entries"].first["subject"] = "two" }
+    assert_raises(FrozenError) { request.routes.first["logical_context"]["channel"] = "hijacked" }
+    assert_raises(FrozenError) { request.routes << {} }
+
+    assert_equal "a", request.artifact.fetch("payload").fetch("window").fetch("since")
+    assert_equal "digest", request.routes.first.fetch("logical_context").fetch("channel")
+  end
+
   def test_carries_no_split_because_the_target_is_not_known_yet
     refute build.to_h.key?("chunks")
   end

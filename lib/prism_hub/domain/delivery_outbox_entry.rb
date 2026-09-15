@@ -85,7 +85,7 @@ module PrismHub
         unless value.is_a?(Hash) && value.keys.include?("schema_version")
           raise InputError.new("hub.delivery_outbox.intent_payload.invalid", "intent payload must be a versioned object")
         end
-        Marshal.load(Marshal.dump(value)).freeze
+        DeepFreeze.call(Marshal.load(Marshal.dump(value)))
       rescue TypeError
         raise InputError.new("hub.delivery_outbox.intent_payload.invalid", "intent payload is not serializable")
       end
@@ -126,7 +126,7 @@ module PrismHub
 
       def optional_hash(value, field)
         return nil if value.nil?
-        return Marshal.load(Marshal.dump(value)).freeze if value.is_a?(Hash)
+        return DeepFreeze.call(Marshal.load(Marshal.dump(value))) if value.is_a?(Hash)
         raise InputError.new("hub.delivery_outbox.#{field}.invalid", "#{field} must be an object")
       end
 

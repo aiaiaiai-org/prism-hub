@@ -115,7 +115,7 @@ module PrismHub
       end
 
       def deep_copy(value, field)
-        Marshal.load(Marshal.dump(value)).freeze
+        DeepFreeze.call(Marshal.load(Marshal.dump(value)))
       rescue TypeError
         raise InputError.new(
           "hub.delivery_request.#{field}.invalid",
