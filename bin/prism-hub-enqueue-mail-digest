@@ -9,8 +9,7 @@ begin
   origin = ENV.fetch("HQBASE_ORIGIN")
   resource = "#{origin}/api/v1"
   mail_command = JSON.parse(ENV.fetch("PRISM_MAIL_COMMAND_JSON", '["prism-mail"]'))
-  porter_command = JSON.parse(ENV.fetch("PRISM_PORTER_COMMAND_JSON", '["prism-porter"]'))
-  commands = {"mail" => mail_command, "porter" => porter_command}
+  commands = {"mail" => mail_command}
   commands.each do |name, command|
     unless command.is_a?(Array) && command.any? && command.all? { |part| part.is_a?(String) && !part.empty? }
       raise PrismHub::ConfigurationError.new(
@@ -21,11 +20,10 @@ begin
   end
 
   mail_timeout_seconds = Float(ENV.fetch("PRISM_MAIL_TIMEOUT_SECONDS", "30"))
-  porter_timeout_seconds = Float(ENV.fetch("PRISM_PORTER_TIMEOUT_SECONDS", "10"))
-  unless mail_timeout_seconds.positive? && porter_timeout_seconds.positive?
+  unless mail_timeout_seconds.positive?
     raise PrismHub::ConfigurationError.new(
       "hub.worker.timeout.invalid",
-      "mail and porter timeouts must be positive numbers"
+      "mail timeout must be a positive number"
     )
   end
 
@@ -56,17 +54,9 @@ begin
     list_mailboxes: list_mailboxes,
     generate_mail_digest: generate
   )
-  porter = PrismHub::UseCases::BuildDeliveryIntent.new(
-    porter_gateway: PrismHub::Adapters::SubprocessPorterGateway.new(
-      command: porter_command,
-      logger: Logger.new($stderr),
-      timeout_seconds: porter_timeout_seconds
-    )
-  )
   use_case = PrismHub::UseCases::EnqueueMailDigestDelivery.new(
     generate_mail_digest: generate,
     generate_mail_digests: generate_all,
-    build_delivery_intent: porter,
     outbox_repository: PrismHub::Adapters::ActiveRecordDeliveryOutboxRepository.new
   )
 

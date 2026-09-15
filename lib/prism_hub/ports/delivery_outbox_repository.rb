@@ -4,7 +4,7 @@
 module PrismHub
   module Ports
     class DeliveryOutboxRepository
-      def enqueue(intent:, available_at:)
+      def enqueue(request:, available_at:)
         raise NotImplementedError
       end
 

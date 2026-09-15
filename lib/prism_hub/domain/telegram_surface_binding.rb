@@ -5,6 +5,9 @@ module PrismHub
   module Domain
     class TelegramSurfaceBinding
       STATUSES = %w[active revoked].freeze
+      # Telegram's sendMessage and editMessageText text limit.
+      # https://core.telegram.org/bots/api#sendmessage
+      TEXT_MAX_CHARS = 4096
       LOGICAL_CHANNEL_PATTERN = /\A[^[:cntrl:]]{1,100}\z/
 
       attr_reader :id,
@@ -45,6 +48,10 @@ module PrismHub
         )
         validate_state!
         freeze
+      end
+
+      def text_max_chars
+        TEXT_MAX_CHARS
       end
 
       def active?

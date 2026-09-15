@@ -27,14 +27,14 @@ class ProcessDeliveryOutboxTest < Minitest::Test
   end
 
   class Dispatcher
-    attr_reader :intent
+    attr_reader :request
 
     def initialize(error: nil)
       @error = error
     end
 
-    def call(intent:)
-      @intent = intent
+    def call(request:)
+      @request = request
       raise @error if @error
       :ok
     end
@@ -42,13 +42,13 @@ class ProcessDeliveryOutboxTest < Minitest::Test
 
   def setup
     @now = Time.utc(2026, 9, 14, 3)
-    @intent = build_intent("hello")
+    @request = build_request
     @entry = PrismHub::Domain::DeliveryOutboxEntry.new(
       id: "entry-1",
       workspace: "personal",
       channel: "digest",
-      idempotency_key: @intent.idempotency_key,
-      intent_payload: @intent.to_h,
+      idempotency_key: @request.idempotency_key,
+      intent_payload: @request.to_h,
       status: "processing",
       attempts: 1,
       available_at: @now,
@@ -57,7 +57,7 @@ class ProcessDeliveryOutboxTest < Minitest::Test
     )
   end
 
-  def test_dispatches_persisted_intent_and_marks_delivery
+  def test_dispatches_the_persisted_request_and_marks_delivery
     repository = Repository.new([@entry])
     dispatcher = Dispatcher.new
     processor = PrismHub::UseCases::ProcessDeliveryOutbox.new(
@@ -68,7 +68,7 @@ class ProcessDeliveryOutboxTest < Minitest::Test
 
     processor.call(limit: 1, lease_seconds: 300)
 
-    assert_equal @intent.to_h, dispatcher.intent.to_h
+    assert_equal @request.to_h, dispatcher.request.to_h
     assert_equal({id: "entry-1", lock_token: "a" * 64, delivered_at: @now}, repository.delivered)
     assert_nil repository.failed
   end
@@ -111,18 +111,14 @@ class ProcessDeliveryOutboxTest < Minitest::Test
 
   private
 
-  def build_intent(text)
-    idempotency_key = Digest::SHA256.hexdigest([
-      "mail.digest", "artifact-1", "personal", "digest", "plain_text", text
-    ].join("\0"))
-    PrismHub::Domain::DeliveryIntent.new(
-      artifact_id: "artifact-1",
-      artifact_kind: "mail.digest",
+  def build_request
+    PrismHub::Domain::DeliveryRequest.new(
+      artifact: {"artifact_id" => "artifact-1", "artifact_kind" => "mail.digest", "payload" => {"a" => 1}},
+      routes: [{"artifact_kind" => "mail.digest",
+                "logical_context" => {"workspace" => "personal", "channel" => "digest"}}],
       workspace: "personal",
       channel: "digest",
-      format: "plain_text",
-      chunks: [{"text" => text, "position" => 1, "total" => 1}],
-      idempotency_key: idempotency_key
+      idempotency_key: Digest::SHA256.hexdigest("artifact-1")
     )
   end
 end

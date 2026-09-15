@@ -24,8 +24,8 @@ module PrismHub
       private
 
       def process(entry)
-        intent = Domain::DeliveryIntent.from_h(entry.intent_payload)
-        @dispatch_delivery.call(intent: intent)
+        request = Domain::DeliveryRequest.from_h(entry.intent_payload)
+        @dispatch_delivery.call(request: request)
         @outbox_repository.mark_delivered(
           id: entry.id,
           lock_token: entry.lock_token,

@@ -18,34 +18,6 @@ class EnqueueMailDigestDeliveryTest < Minitest::Test
     end
   end
 
-  class Builder
-    attr_reader :arguments
-
-    def call(**arguments)
-      @arguments = arguments
-      build_intent(arguments.fetch(:artifact), arguments.fetch(:routes).first.fetch("logical_context"))
-    end
-
-    private
-
-    def build_intent(artifact, context)
-      text = JSON.generate(artifact.fetch("payload"))
-      key = Digest::SHA256.hexdigest([
-        artifact.fetch("artifact_kind"), artifact.fetch("artifact_id"), context.fetch("workspace"),
-        context.fetch("channel"), "plain_text", text
-      ].join("\0"))
-      PrismHub::Domain::DeliveryIntent.new(
-        artifact_id: artifact.fetch("artifact_id"),
-        artifact_kind: artifact.fetch("artifact_kind"),
-        workspace: context.fetch("workspace"),
-        channel: context.fetch("channel"),
-        format: "plain_text",
-        chunks: [{"text" => text, "position" => 1, "total" => 1}],
-        idempotency_key: key
-      )
-    end
-  end
-
   class Outbox
     attr_reader :arguments
 
@@ -58,13 +30,11 @@ class EnqueueMailDigestDeliveryTest < Minitest::Test
   def test_generates_all_mailboxes_builds_logical_route_and_enqueues
     artifact = {"schema_version" => "prism-hub.mail-digests.v1", "entries" => []}
     generator = Generator.new(artifact)
-    builder = Builder.new
     outbox = Outbox.new
     now = Time.utc(2026, 9, 14, 4)
     use_case = PrismHub::UseCases::EnqueueMailDigestDelivery.new(
       generate_mail_digest: generator,
       generate_mail_digests: generator,
-      build_delivery_intent: builder,
       outbox_repository: outbox,
       clock: -> { now }
     )
@@ -73,13 +43,41 @@ class EnqueueMailDigestDeliveryTest < Minitest::Test
       since: "2026-09-14T03:00:00Z",
       before: "2026-09-14T04:00:00Z",
       workspace: "personal",
-      channel: "digest"
+      channel: "digest",
+      chunk_max_chars: 2000
     )
 
+    request = outbox.arguments.fetch(:request)
+    context = request.routes.first.fetch("logical_context")
+
     assert_equal 1, generator.calls.length
-    assert_equal "personal", builder.arguments.fetch(:routes).first.fetch("logical_context").fetch("workspace")
-    assert_equal "digest", builder.arguments.fetch(:routes).first.fetch("logical_context").fetch("channel")
+    assert_equal "personal", context.fetch("workspace")
+    assert_equal "digest", context.fetch("channel")
     assert_equal now, outbox.arguments.fetch(:available_at)
-    assert_match(/\Amail-digest-[0-9a-f]{64}\z/, outbox.arguments.fetch(:intent).artifact_id)
+    assert_match(/\Amail-digest-[0-9a-f]{64}\z/, request.artifact.fetch("artifact_id"))
+    assert_equal artifact, request.artifact.fetch("payload")
+    assert_equal 2000, request.chunk_max_chars_limit
+  end
+
+  def test_enqueues_without_rendering_so_the_split_can_follow_the_target
+    generator = Generator.new({"schema_version" => "prism-hub.mail-digests.v1", "entries" => []})
+    outbox = Outbox.new
+    PrismHub::UseCases::EnqueueMailDigestDelivery.new(
+      generate_mail_digest: generator,
+      generate_mail_digests: generator,
+      outbox_repository: outbox,
+      clock: -> { Time.utc(2026, 9, 14, 4) }
+    ).call(
+      since: "2026-09-14T03:00:00Z", before: "2026-09-14T04:00:00Z",
+      workspace: "personal", channel: "digest"
+    )
+
+    request = outbox.arguments.fetch(:request)
+
+    assert_instance_of PrismHub::Domain::DeliveryRequest, request
+    assert_nil request.chunk_max_chars_limit
+    refute request.to_h.key?("chunks"), "the queue must not carry a target-specific split"
+    round_trip = PrismHub::Domain::DeliveryRequest.from_h(JSON.parse(JSON.generate(request.to_h)))
+    assert_equal request.to_h, round_trip.to_h, "a queued request must survive JSON storage"
   end
 end
