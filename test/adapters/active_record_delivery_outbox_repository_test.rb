@@ -16,11 +16,11 @@ class ActiveRecordDeliveryOutboxRepositoryTest < Minitest::Test
     clear_tables
   end
 
-  def test_enqueue_is_idempotent_by_delivery_intent_fingerprint
-    intent = build_intent("hello")
+  def test_enqueue_is_idempotent_by_delivery_request_fingerprint
+    request = build_request("hello")
 
-    first = @repository.enqueue(intent: intent, available_at: @now)
-    second = @repository.enqueue(intent: intent, available_at: @now + 60)
+    first = @repository.enqueue(request: request, available_at: @now)
+    second = @repository.enqueue(request: request, available_at: @now + 60)
 
     assert_equal first.id, second.id
     assert_equal 1, PrismHub::Adapters::ActiveRecordRecords::DeliveryOutboxEntry.count
@@ -28,8 +28,8 @@ class ActiveRecordDeliveryOutboxRepositoryTest < Minitest::Test
   end
 
   def test_claim_increments_attempts_and_uses_a_lease_token
-    intent = build_intent("hello")
-    entry = @repository.enqueue(intent: intent, available_at: @now)
+    request = build_request("hello")
+    entry = @repository.enqueue(request: request, available_at: @now)
 
     claimed = @repository.claim_due(limit: 1, now: @now, lease_seconds: 300)
 
@@ -41,8 +41,8 @@ class ActiveRecordDeliveryOutboxRepositoryTest < Minitest::Test
   end
 
   def test_expired_processing_lease_can_be_reclaimed
-    intent = build_intent("hello")
-    @repository.enqueue(intent: intent, available_at: @now)
+    request = build_request("hello")
+    @repository.enqueue(request: request, available_at: @now)
     first = @repository.claim_due(limit: 1, now: @now, lease_seconds: 300).first
 
     second = @repository.claim_due(limit: 1, now: @now + 301, lease_seconds: 300).first
@@ -53,8 +53,8 @@ class ActiveRecordDeliveryOutboxRepositoryTest < Minitest::Test
   end
 
   def test_delivery_requires_the_current_lease_token
-    intent = build_intent("hello")
-    @repository.enqueue(intent: intent, available_at: @now)
+    request = build_request("hello")
+    @repository.enqueue(request: request, available_at: @now)
     claimed = @repository.claim_due(limit: 1, now: @now, lease_seconds: 300).first
 
     error = assert_raises(PrismHub::InputError) do
@@ -69,8 +69,8 @@ class ActiveRecordDeliveryOutboxRepositoryTest < Minitest::Test
   end
 
   def test_failure_can_schedule_a_retry
-    intent = build_intent("hello")
-    @repository.enqueue(intent: intent, available_at: @now)
+    request = build_request("hello")
+    @repository.enqueue(request: request, available_at: @now)
     claimed = @repository.claim_due(limit: 1, now: @now, lease_seconds: 300).first
     retry_at = @now + 60
 
@@ -91,18 +91,18 @@ class ActiveRecordDeliveryOutboxRepositoryTest < Minitest::Test
 
   private
 
-  def build_intent(text)
-    idempotency_key = Digest::SHA256.hexdigest([
-      "mail.digest", "artifact-#{text}", "personal", "digest", "plain_text", text
-    ].join("\0"))
-    PrismHub::Domain::DeliveryIntent.new(
-      artifact_id: "artifact-#{text}",
-      artifact_kind: "mail.digest",
+  def build_request(text)
+    PrismHub::Domain::DeliveryRequest.new(
+      artifact: {
+        "artifact_id" => "artifact-#{text}",
+        "artifact_kind" => "mail.digest",
+        "payload" => {"schema_version" => "prism-mail.digest.v1", "text" => text}
+      },
+      routes: [{"artifact_kind" => "mail.digest",
+                "logical_context" => {"workspace" => "personal", "channel" => "digest"}}],
       workspace: "personal",
       channel: "digest",
-      format: "plain_text",
-      chunks: [{"text" => text, "position" => 1, "total" => 1}],
-      idempotency_key: idempotency_key
+      idempotency_key: Digest::SHA256.hexdigest("artifact-#{text}")
     )
   end
 
