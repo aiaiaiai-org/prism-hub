@@ -5,17 +5,14 @@ name: Validate deploy
 on:
   pull_request:
     paths:
-      - '.github/workflows/bootstrap-production-database.yml'
       - '.github/workflows/deploy-production.yml'
       - '.github/workflows/validate-deploy.yml'
       - '.github/workflows/full-ci.yml'
-      - 'script/bootstrap-production-database'
-      - 'script/deploy-production'
+      - 'Gemfile'
+      - 'Gemfile.lock'
       - 'config/database.yml'
       - 'config/environments/production.rb'
       - 'config/puma.rb'
-      - 'Gemfile'
-      - 'Gemfile.lock'
   workflow_dispatch:
 
 permissions:
@@ -37,12 +34,6 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Validate deployment script syntax
-        shell: bash
-        run: |
-          bash -n script/deploy-production
-          bash -n script/bootstrap-production-database
-
       - name: Validate workflow contract
         shell: bash
         run: |
@@ -50,82 +41,30 @@ jobs:
 
           ruby <<'RUBY'
           deploy = File.read('.github/workflows/deploy-production.yml')
-          bootstrap = File.read('.github/workflows/bootstrap-production-database.yml')
-          deploy_script = File.read('script/deploy-production')
-          bootstrap_script = File.read('script/bootstrap-production-database')
+          validate = File.read('.github/workflows/validate-deploy.yml')
 
-          deploy_fragments = [
+          required = [
             'workflow_dispatch:',
+            'inputs:',
             'environment: production',
             'contents: read',
-            'StrictHostKeyChecking=yes',
-            'secrets.SSH_HOST',
-            'secrets.SSH_USER',
-            'secrets.SSH_PRIVATE_KEY',
-            'secrets.SSH_KNOWN_HOSTS',
-            'secrets.DATABASE_URL',
-            'PRISM_HUB_PROVIDER_TOKEN',
-            'HQBASE_ORIGIN',
-            'SECRET_KEY_BASE',
-            'script/deploy-production'
+            'secrets.INFRA_DEPLOY_TOKEN',
+            'https://api.github.com/repos/aiaiaiai-org/infra/dispatches',
+            '"event_type": "deploy-workload"',
+            '"workload": "prism-hub"',
+            '"ref": os.environ["RELEASE_REF"]',
+            'aiaiaiai-org/infra',
           ]
-          missing = deploy_fragments.reject { |fragment| deploy.include?(fragment) }
+          missing = required.reject { |fragment| deploy.include?(fragment) }
           abort "deploy workflow is missing: #{missing.join(', ')}" unless missing.empty?
+
           abort 'deploy workflow must not deploy on push' if deploy.match?(/^\s+push:\s*$/)
+          abort 'deploy workflow must not contain repository SSH credentials' if deploy.match?(/secrets\.SSH_(HOST|USER|PRIVATE_KEY|KNOWN_HOSTS)/)
           abort 'deploy workflow must not disable SSH host verification' if deploy.include?('StrictHostKeyChecking=no')
+          abort 'validate workflow must not encode obsolete SSH deployment assumptions' if validate.include?('secrets.' + 'SSH_')
 
-          bootstrap_fragments = [
-            'workflow_dispatch:',
-            'environment: production',
-            'secrets.SSH_HOST',
-            'secrets.SSH_USER',
-            'secrets.SSH_PRIVATE_KEY',
-            'secrets.DATABASE_URL',
-            'script/bootstrap-production-database',
-            'source: configured `DATABASE_URL` Environment secret',
-            'source: managed VPS-local fallback'
-          ]
-          missing = bootstrap_fragments.reject { |fragment| bootstrap.include?(fragment) }
-          abort "database bootstrap workflow is missing: #{missing.join(', ')}" unless missing.empty?
-          abort 'database bootstrap must not run on push' if bootstrap.match?(/^\s+push:\s*$/)
-          abort 'database bootstrap must not disable SSH host verification' if bootstrap.include?('StrictHostKeyChecking=no')
-
-          script_fragments = {
-            'deploy script' => [
-              'shared_root="${app_root}/shared"',
-              'incoming_has_database',
-              'database.env',
-              'DATABASE_URL is not configured and managed VPS database credentials are missing'
-            ],
-            'database bootstrap script' => [
-              'openssl rand -hex 32',
-              'prism_hub_production',
-              'prism_hub',
-              'database.env',
-              'DATABASE_URL=postgresql://',
-              'sudo -n -u postgres psql',
-              '<"$sql_file"'
-            ]
-          }
-          scripts = {
-            'deploy script' => deploy_script,
-            'database bootstrap script' => bootstrap_script
-          }
-          script_fragments.each do |name, fragments|
-            missing = fragments.reject { |fragment| scripts.fetch(name).include?(fragment) }
-            abort "#{name} is missing: #{missing.join(', ')}" unless missing.empty?
-          end
-          abort 'database bootstrap must not make postgres read a deploy-owned private SQL file' if bootstrap_script.include?('--file="$sql_file"')
+          abort 'deploy workflow must delegate target resolution to infra' unless deploy.include?('target, SSH credentials, deployment path and service')
           RUBY
-
-      - name: Validate immutable archive contract
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          archive="${RUNNER_TEMP}/prism-hub-validate.tar.gz"
-          git archive --format=tar.gz --output="$archive" HEAD
-          tar -tzf "$archive" | grep -Fx 'script/deploy-production' >/dev/null
-          tar -tzf "$archive" | grep -Fx 'script/bootstrap-production-database' >/dev/null
 
       - name: Validate production runtime configuration
         shell: bash

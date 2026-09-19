@@ -4,6 +4,12 @@ name: Deploy production
 
 on:
   workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to deploy
+        required: false
+        default: master
+        type: string
 
 permissions:
   contents: read
@@ -13,247 +19,76 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
-    name: Deploy production
+  dispatch:
+    name: Dispatch production deployment
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 10
     environment: production
-    env:
-      DEPLOY_HOST: ${{ secrets.SSH_HOST }}
-      DEPLOY_USER: ${{ secrets.SSH_USER }}
-      DEPLOY_SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-      DEPLOY_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
-      DEPLOY_PORT: ${{ vars.SSH_PORT || '22' }}
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      SECRET_KEY_BASE: ${{ secrets.SECRET_KEY_BASE }}
-      PRISM_HUB_PROVIDER_TOKEN: ${{ secrets.PRISM_HUB_PROVIDER_TOKEN }}
-      HQBASE_ORIGIN: ${{ vars.HQBASE_ORIGIN }}
-      PRISM_HUB_CHANNELS_JSON: ${{ vars.PRISM_HUB_CHANNELS_JSON || '[]' }}
-      PRISM_RUNTIME_COMMAND_JSON: ${{ vars.PRISM_RUNTIME_COMMAND_JSON || '["prism-runtime","--json"]' }}
-      PRISM_RUNTIME_TIMEOUT_SECONDS: ${{ vars.PRISM_RUNTIME_TIMEOUT_SECONDS || '10' }}
-      PRISM_MAIL_COMMAND_JSON: ${{ vars.PRISM_MAIL_COMMAND_JSON || '["prism-mail"]' }}
-      PRISM_MAIL_TIMEOUT_SECONDS: ${{ vars.PRISM_MAIL_TIMEOUT_SECONDS || '30' }}
-      PRISM_HUB_PUBLIC_URL: ${{ vars.PRISM_HUB_PUBLIC_URL }}
 
     steps:
-      - name: Check out production source
-        uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-          fetch-depth: 1
-
-      - name: Validate deployment contract
+      - name: Validate deployment ref
+        id: ref
         shell: bash
+        env:
+          RELEASE_REF: ${{ inputs.ref }}
         run: |
           set -Eeuo pipefail
 
-          if [[ "$GITHUB_REF" != "refs/heads/master" ]]; then
-            echo "Production deployments must run from master; selected ref is ${GITHUB_REF}." >&2
+          ref="${RELEASE_REF:-master}"
+          if [[ -z "$ref" || "$ref" == -* || "$ref" == *' '* ]]; then
+            echo "ref must be a non-empty Git ref without leading '-' or spaces" >&2
             exit 64
           fi
 
-          required=(
-            DEPLOY_HOST
-            DEPLOY_USER
-            DEPLOY_SSH_KEY
-            DEPLOY_KNOWN_HOSTS
-            SECRET_KEY_BASE
-            PRISM_HUB_PROVIDER_TOKEN
-            HQBASE_ORIGIN
-          )
+          if ! git ls-remote --exit-code "https://github.com/${GITHUB_REPOSITORY}.git" \
+            "refs/heads/${ref}" "refs/tags/${ref}" >/dev/null 2>&1; then
+            echo "requested ref does not exist: ${ref}" >&2
+            exit 64
+          fi
 
-          missing=()
-          for variable_name in "${required[@]}"; do
-            if [[ -z "${!variable_name:-}" ]]; then
-              missing+=("$variable_name")
-            fi
-          done
+          echo "release_ref=$ref" >>"$GITHUB_OUTPUT"
 
-          if (( ${#missing[@]} > 0 )); then
-            printf 'Missing production environment values: %s\n' "${missing[*]}" >&2
+      - name: Dispatch to aiaiaiai infra
+        env:
+          INFRA_DEPLOY_TOKEN: ${{ secrets.INFRA_DEPLOY_TOKEN }}
+          RELEASE_REF: ${{ steps.ref.outputs.release_ref }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          if [[ -z "${INFRA_DEPLOY_TOKEN:-}" ]]; then
+            echo "INFRA_DEPLOY_TOKEN is required in the production Environment" >&2
             exit 78
           fi
 
-          if [[ ! "$DEPLOY_PORT" =~ ^[0-9]+$ ]] || (( DEPLOY_PORT < 1 || DEPLOY_PORT > 65535 )); then
-            echo "SSH_PORT must be a valid TCP port." >&2
-            exit 78
-          fi
-
-          python3 <<'PY'
-          import base64
-          import binascii
-          import os
-          from urllib.parse import urlparse
-
-          if len(os.environ["SECRET_KEY_BASE"]) < 64:
-              raise SystemExit("SECRET_KEY_BASE must contain at least 64 characters")
-
-          try:
-              provider_key = base64.b64decode(
-                  os.environ["PRISM_HUB_PROVIDER_TOKEN"],
-                  validate=True,
-              )
-          except (binascii.Error, ValueError) as error:
-              raise SystemExit("PRISM_HUB_PROVIDER_TOKEN must be strict Base64") from error
-          if len(provider_key) != 32:
-              raise SystemExit("PRISM_HUB_PROVIDER_TOKEN must decode to exactly 32 bytes")
-
-          origin = urlparse(os.environ["HQBASE_ORIGIN"])
-          if not (
-              origin.scheme == "https"
-              and origin.hostname
-              and origin.username is None
-              and origin.password is None
-              and origin.query == ""
-              and origin.fragment == ""
-              and origin.path in ("", "/")
-          ):
-              raise SystemExit(
-                  "HQBASE_ORIGIN must be an HTTPS origin without credentials, query, fragment, or path"
-              )
-
-          database_url = os.environ.get("DATABASE_URL", "")
-          if database_url:
-              database = urlparse(database_url)
-              if database.scheme not in ("postgres", "postgresql"):
-                  raise SystemExit("DATABASE_URL must use postgres:// or postgresql://")
-              if not database.path or database.path == "/":
-                  raise SystemExit("DATABASE_URL must select a database")
-          PY
-
-      - name: Build immutable source archive
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          git archive \
-            --format=tar.gz \
-            --output="${RUNNER_TEMP}/prism-hub-${GITHUB_SHA}.tar.gz" \
-            HEAD
-
-      - name: Build production environment file
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          umask 077
-
-          python3 - <<'PY' >"${RUNNER_TEMP}/prism-hub-production.env"
+          payload="$(python3 - <<'PY'
+          import json
           import os
 
-          values = {
-              "RAILS_ENV": "production",
-              "RAILS_FORCE_SSL": "true",
-              "RAILS_LOG_LEVEL": "info",
-              "PORT": "3000",
-              "SECRET_KEY_BASE": os.environ["SECRET_KEY_BASE"],
-              "PRISM_HUB_LEGACY_TOKEN_ENABLED": "false",
-              "PRISM_HUB_CHANNELS_JSON": os.environ["PRISM_HUB_CHANNELS_JSON"],
-              "PRISM_RUNTIME_COMMAND_JSON": os.environ["PRISM_RUNTIME_COMMAND_JSON"],
-              "PRISM_RUNTIME_TIMEOUT_SECONDS": os.environ["PRISM_RUNTIME_TIMEOUT_SECONDS"],
-              "HQBASE_ORIGIN": os.environ["HQBASE_ORIGIN"],
-              "PRISM_HUB_PROVIDER_TOKEN": os.environ["PRISM_HUB_PROVIDER_TOKEN"],
-              "PRISM_MAIL_COMMAND_JSON": os.environ["PRISM_MAIL_COMMAND_JSON"],
-              "PRISM_MAIL_TIMEOUT_SECONDS": os.environ["PRISM_MAIL_TIMEOUT_SECONDS"],
-          }
-          if os.environ.get("DATABASE_URL"):
-              values["DATABASE_URL"] = os.environ["DATABASE_URL"]
-
-          for key, value in values.items():
-              if "\x00" in value or "\n" in value or "\r" in value:
-                  raise SystemExit(f"{key} must be a single-line environment value")
-              escaped = value.replace("\\", "\\\\").replace('"', '\\"')
-              print(f'{key}="{escaped}"')
+          print(json.dumps({
+              "event_type": "deploy-workload",
+              "client_payload": {
+                  "workload": "prism-hub",
+                  "ref": os.environ["RELEASE_REF"],
+              },
+          }))
           PY
+          )"
 
-      - name: Configure verified SSH transport
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          umask 077
-          mkdir -p "${HOME}/.ssh"
-          printf '%s\n' "$DEPLOY_SSH_KEY" >"${HOME}/.ssh/id_prism_hub"
-          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" >"${HOME}/.ssh/known_hosts"
-          chmod 600 "${HOME}/.ssh/id_prism_hub" "${HOME}/.ssh/known_hosts"
+          curl --fail --silent --show-error \
+            --request POST \
+            --url "https://api.github.com/repos/aiaiaiai-org/infra/dispatches" \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer ${INFRA_DEPLOY_TOKEN}" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            --header "Content-Type: application/json" \
+            --data "$payload"
 
-      - name: Transfer release inputs
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          ssh_options=(
-            -i "${HOME}/.ssh/id_prism_hub"
-            -o BatchMode=yes
-            -o IdentitiesOnly=yes
-            -o StrictHostKeyChecking=yes
-            -p "$DEPLOY_PORT"
-          )
-          scp_options=(
-            -i "${HOME}/.ssh/id_prism_hub"
-            -o BatchMode=yes
-            -o IdentitiesOnly=yes
-            -o StrictHostKeyChecking=yes
-            -P "$DEPLOY_PORT"
-          )
-
-          remote_prefix="/tmp/prism-hub-${GITHUB_SHA}"
-          ssh "${ssh_options[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
-            "rm -f '${remote_prefix}.tar.gz' '${remote_prefix}.env' '${remote_prefix}.deploy'"
-          scp "${scp_options[@]}" \
-            "${RUNNER_TEMP}/prism-hub-${GITHUB_SHA}.tar.gz" \
-            "${DEPLOY_USER}@${DEPLOY_HOST}:${remote_prefix}.tar.gz"
-          scp "${scp_options[@]}" \
-            "${RUNNER_TEMP}/prism-hub-production.env" \
-            "${DEPLOY_USER}@${DEPLOY_HOST}:${remote_prefix}.env"
-          scp "${scp_options[@]}" \
-            script/deploy-production \
-            "${DEPLOY_USER}@${DEPLOY_HOST}:${remote_prefix}.deploy"
-
-      - name: Activate release
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          ssh_options=(
-            -i "${HOME}/.ssh/id_prism_hub"
-            -o BatchMode=yes
-            -o IdentitiesOnly=yes
-            -o StrictHostKeyChecking=yes
-            -p "$DEPLOY_PORT"
-          )
-          remote_prefix="/tmp/prism-hub-${GITHUB_SHA}"
-
-          ssh "${ssh_options[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
-            "chmod 700 '${remote_prefix}.deploy' && '${remote_prefix}.deploy' '${GITHUB_SHA}' '${remote_prefix}.tar.gz' '${remote_prefix}.env'; status=\$?; rm -f '${remote_prefix}.deploy' '${remote_prefix}.tar.gz' '${remote_prefix}.env'; exit \$status"
-
-      - name: Verify public health
-        if: ${{ env.PRISM_HUB_PUBLIC_URL != '' }}
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          base_url="${PRISM_HUB_PUBLIC_URL%/}"
-          curl \
-            --fail \
-            --silent \
-            --show-error \
-            --max-time 10 \
-            --retry 5 \
-            --retry-delay 2 \
-            "${base_url}/healthz" >/dev/null
-
-      - name: Record deployment summary
-        shell: bash
-        run: |
           {
             echo '### Prism Hub production deployment'
             echo
-            echo "- commit: \`${GITHUB_SHA}\`"
-            echo '- environment: `production`'
-            if [[ -n "$DATABASE_URL" ]]; then
-              echo '- database source: configured `DATABASE_URL` Environment secret'
-            else
-              echo '- database source: managed VPS-local `/srv/prism-hub/shared/database.env`'
-            fi
-            echo '- local health: passed'
-            if [[ -n "$PRISM_HUB_PUBLIC_URL" ]]; then
-              echo '- public health: passed'
-            else
-              echo '- public health: skipped (`PRISM_HUB_PUBLIC_URL` is not configured)'
-            fi
+            echo "- infra workload: `prism-hub`"
+            echo "- release ref: `${RELEASE_REF}`"
+            echo "- target, SSH credentials, deployment path and service: resolved by `aiaiaiai-org/infra`"
+            echo "- activation: delegated to the infra workload contract"
           } >>"$GITHUB_STEP_SUMMARY"
