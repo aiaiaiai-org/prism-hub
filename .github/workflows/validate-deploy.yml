@@ -61,7 +61,7 @@ jobs:
           abort 'deploy workflow must not deploy on push' if deploy.match?(/^\s+push:\s*$/)
           abort 'deploy workflow must not contain repository SSH credentials' if deploy.match?(/secrets\.SSH_(HOST|USER|PRIVATE_KEY|KNOWN_HOSTS)/)
           abort 'deploy workflow must not disable SSH host verification' if deploy.include?('StrictHostKeyChecking=no')
-          abort 'validate workflow must not encode obsolete SSH deployment assumptions' if validate.include?('secrets.SSH_')
+          abort 'validate workflow must not encode obsolete SSH deployment assumptions' if validate.include?('secrets.' + 'SSH_')
 
           abort 'deploy workflow must delegate target resolution to infra' unless deploy.include?('target, SSH credentials, deployment path and service')
           RUBY
