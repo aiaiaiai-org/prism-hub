@@ -102,13 +102,15 @@ declarative configuration and must match the active Prism provider adapter.
 
 ## Production deployment
 
-Production deployment is manual by design. Repository-side deployability is
-checked by `Validate deploy`; activation is performed by `Deploy production`
-from `master` through the GitHub `production` Environment.
+Production deployment is manual by design. `Validate deploy` checks the
+repository-side contract; `Deploy production` delegates activation to
+`aiaiaiai-org/infra`.
 
-The exact Environment secret/variable contract, VPS prerequisites, atomic
-release layout, health checks, and rollback behavior are documented in
-[`docs/deployment.md`](docs/deployment.md).
+The infra repository owns production target selection, SSH credentials,
+release activation, rollback, and retention. See
+[`docs/deployment.md`](docs/deployment.md) for the boundary and Environment
+contract.
+
 
 ## Verification
 
