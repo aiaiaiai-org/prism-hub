@@ -85,7 +85,7 @@ CREATE TABLE public.alert_subscriptions (
     include_nearby boolean DEFAULT true NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
-    CONSTRAINT alert_subscriptions_categories_check CHECK ((((cardinality(categories) >= 1) AND (cardinality(categories) <= 3)) AND (categories <@ ARRAY['drone'::character varying, 'bomb'::character varying, 'missile'::character varying]))),
+    CONSTRAINT alert_subscriptions_categories_check CHECK (((cardinality(categories) >= 1) AND (cardinality(categories) <= 3) AND (categories <@ ARRAY['drone'::character varying, 'bomb'::character varying, 'missile'::character varying]))),
     CONSTRAINT alert_subscriptions_cell_check CHECK (((cell)::text ~ '^86[0-9a-f]{13}$'::text))
 );
 
