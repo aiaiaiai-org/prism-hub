@@ -304,8 +304,8 @@ CREATE TABLE public.signal_alert_deliveries (
     event_seq integer NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
-    CONSTRAINT signal_alert_deliveries_class_check CHECK (((hazard_class)::text = ANY (ARRAY[('drone'::character varying)::text, ('bomb'::character varying)::text, ('missile'::character varying)::text]))),
-    CONSTRAINT signal_alert_deliveries_kind_check CHECK (((delivery_kind)::text = ANY (ARRAY[('alert'::character varying)::text, ('retraction'::character varying)::text])))
+    CONSTRAINT signal_alert_deliveries_class_check CHECK (((hazard_class)::text = ANY ((ARRAY['drone'::character varying, 'bomb'::character varying, 'missile'::character varying])::text[]))),
+    CONSTRAINT signal_alert_deliveries_kind_check CHECK (((delivery_kind)::text = ANY ((ARRAY['alert'::character varying, 'retraction'::character varying])::text[])))
 );
 
 
