@@ -16,6 +16,7 @@ expected_operations = {
   ["/api/v1/alert-subscriptions/personal/status", "post"] => "getPersonalAlertSubscription",
   ["/api/v1/alert-subscriptions/personal/save", "post"] => "savePersonalAlertSubscription",
   ["/api/v1/alert-subscriptions/personal/clear", "post"] => "clearPersonalAlertSubscription",
+  ["/api/v1/telegram/surfaces/bind", "post"] => "bindTelegramSurface",
   ["/api/v1/bot-instances/personal/status", "post"] => "getPersonalBotStatus",
   ["/api/v1/bot-instances/personal/pause", "post"] => "pausePersonalBot",
   ["/api/v1/bot-instances/personal/resume", "post"] => "resumePersonalBot",
@@ -31,7 +32,7 @@ lifecycle_routes = %w[
 ].freeze
 
 raise "OpenAPI version drift" unless contract.fetch("openapi") == "3.1.0"
-raise "Hub API metadata version drift" unless contract.dig("info", "version") == "0.1.0-alpha.9"
+raise "Hub API metadata version drift" unless contract.dig("info", "version") == "0.1.0-alpha.10"
 
 expected_operations.each do |(route, method), operation_id|
   actual = contract.dig("paths", route, method, "operationId")
@@ -83,6 +84,13 @@ end
   route = "/api/v1/alert-subscriptions/personal/#{operation}"
   responses = contract.dig("paths", route, "post", "responses")
   raise "POST #{route} must declare 409" unless responses.key?("409")
+end
+
+bind_request = contract.dig("components", "schemas", "TelegramSurfaceBindRequest")
+unless bind_request.fetch("additionalProperties") == false &&
+    bind_request.fetch("required").sort == %w[chat_id logical_channel provider provider_scope subject_id workspace_id] &&
+    bind_request.fetch("properties").keys.sort == (bind_request.fetch("required") + %w[bot_instance_id message_thread_id]).sort
+  raise "surface bind request must carry provider evidence and a chat, with the bot instance optional"
 end
 
 actor_request = contract.dig("components", "schemas", "ActorResolutionRequest")

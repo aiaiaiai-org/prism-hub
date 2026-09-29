@@ -40,7 +40,8 @@ module PrismHub
         )
         bind_telegram_surface = UseCases::BindTelegramSurface.new(
           resolve_workspace_actor: resolve_actor,
-          binding_repository: binding_repository
+          binding_repository: binding_repository,
+          bot_instance_repository: Adapters::ActiveRecordBotInstanceRepository.new
         )
         validate = execution_use_case("validate", channels: channels, gateway: gateway)
         publish = execution_use_case("publish", channels: channels, gateway: gateway)

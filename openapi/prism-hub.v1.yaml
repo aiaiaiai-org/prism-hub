@@ -3,7 +3,7 @@
 openapi: 3.1.0
 info:
   title: Prism Hub API
-  version: 0.1.0-alpha.9
+  version: 0.1.0-alpha.10
   summary: Versioned client boundary for Prism control-plane operations
   description: >-
     Clients authenticate with client-scoped opaque Hub credentials and use
@@ -291,6 +291,48 @@ paths:
       responses:
         "200":
           $ref: "#/components/responses/AlertSubscriptionResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/InputRejected"
+  /api/v1/telegram/surfaces/bind:
+    post:
+      operationId: bindTelegramSurface
+      summary: Bind a Telegram chat to a logical channel of a workspace
+      description: >-
+        Requires actors:resolve. The person must be an active member of the
+        workspace. After binding, the Hub delivers what it queues for the
+        workspace's logical channel to that chat. Repeating the same binding is
+        idempotent, and one logical channel points at one chat at a time.
+        bot_instance_id is optional: omitted, it is the calling bot's own
+        instance in that workspace, which exists once the bot has read the
+        person's bot status.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TelegramSurfaceBindRequest"
+      responses:
+        "200":
+          description: The active binding
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelegramSurfaceBindResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -855,6 +897,61 @@ components:
           oneOf:
             - $ref: "#/components/schemas/AlertSubscriptionState"
             - type: "null"
+    TelegramSurfaceBindRequest:
+      type: object
+      additionalProperties: false
+      required: [workspace_id, logical_channel, chat_id, provider, provider_scope, subject_id]
+      properties:
+        workspace_id:
+          type: string
+          minLength: 1
+        bot_instance_id:
+          type: string
+          minLength: 1
+        logical_channel:
+          type: string
+          minLength: 1
+          maxLength: 100
+        chat_id:
+          type: integer
+        message_thread_id:
+          type: [integer, "null"]
+          minimum: 1
+        provider:
+          type: string
+          pattern: "^[a-z][a-z0-9._-]{0,63}$"
+        provider_scope:
+          type: string
+          pattern: "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        subject_id:
+          type: string
+          minLength: 1
+          maxLength: 512
+    TelegramSurfaceBindResponse:
+      type: object
+      additionalProperties: false
+      required: [binding]
+      properties:
+        binding:
+          type: object
+          additionalProperties: false
+          required: [id, workspace_id, bot_instance_id, logical_channel, chat_id, message_thread_id, status]
+          properties:
+            id:
+              type: string
+            workspace_id:
+              type: string
+            bot_instance_id:
+              type: string
+            logical_channel:
+              type: string
+            chat_id:
+              type: integer
+            message_thread_id:
+              type: [integer, "null"]
+            status:
+              type: string
+              enum: [active]
     PublicationRequest:
       type: object
       additionalProperties: false

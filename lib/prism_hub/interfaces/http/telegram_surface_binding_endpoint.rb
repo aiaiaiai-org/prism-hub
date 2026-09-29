@@ -5,8 +5,8 @@ module PrismHub
   module Interfaces
     module Http
       class TelegramSurfaceBindingEndpoint
-        REQUIRED_FIELDS = %w[workspace_id bot_instance_id logical_channel chat_id provider provider_scope subject_id].freeze
-        OPTIONAL_FIELDS = %w[message_thread_id].freeze
+        REQUIRED_FIELDS = %w[workspace_id logical_channel chat_id provider provider_scope subject_id].freeze
+        OPTIONAL_FIELDS = %w[bot_instance_id message_thread_id].freeze
 
         def initialize(bind_telegram_surface:, request_body:)
           @bind_telegram_surface = bind_telegram_surface
@@ -20,7 +20,7 @@ module PrismHub
           binding = @bind_telegram_surface.call(
             authorisation_context: authorisation_context,
             workspace_id: payload.fetch("workspace_id"),
-            bot_instance_id: payload.fetch("bot_instance_id"),
+            bot_instance_id: payload["bot_instance_id"],
             logical_channel: payload.fetch("logical_channel"),
             chat_id: payload.fetch("chat_id"),
             message_thread_id: payload["message_thread_id"],
@@ -44,7 +44,8 @@ module PrismHub
             raise InputError.new("hub.telegram_surface_binding.request.invalid", "Telegram surface binding request contains unsupported or missing fields")
           end
 
-          strings = %w[workspace_id bot_instance_id logical_channel provider provider_scope subject_id]
+          strings = %w[workspace_id logical_channel provider provider_scope subject_id]
+          strings << "bot_instance_id" if payload.key?("bot_instance_id")
           unless strings.all? { |field| payload[field].is_a?(String) && !payload[field].empty? }
             raise InputError.new("hub.telegram_surface_binding.request.invalid", "Telegram surface binding identifiers must be non-empty strings")
           end
