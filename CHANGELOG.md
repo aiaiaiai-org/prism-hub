@@ -21,6 +21,12 @@ All notable changes to Prism Hub will be documented here.
 
 ### Added
 
+- Personal alert subscriptions: one subscription per personal workspace holding a resolution 6 grid
+  cell (about 3 km), the categories (`drone`, `bomb`, `missile`) and a nearby-warnings flag. The client
+  derives the cell from a position and sends only the cell, so the Hub never receives coordinates.
+  `POST /api/v1/alert-subscriptions/personal/{status,save,clear}`, the
+  `alert_subscriptions:read` and `alert_subscriptions:manage` capabilities, and API version
+  `0.1.0-alpha.9`. Clearing deletes the row.
 - Idempotent provider-backed actor onboarding with public user IDs and personal workspaces.
 - Read-only provider-backed personal actor resolution for stateless clients.
 - Per-workspace persistent bot lifecycle state with audit history.

@@ -3,7 +3,7 @@
 openapi: 3.1.0
 info:
   title: Prism Hub API
-  version: 0.1.0-alpha.8
+  version: 0.1.0-alpha.9
   summary: Versioned client boundary for Prism control-plane operations
   description: >-
     Clients authenticate with client-scoped opaque Hub credentials and use
@@ -274,6 +274,101 @@ paths:
           $ref: "#/components/responses/PayloadTooLarge"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
+  /api/v1/alert-subscriptions/personal/status:
+    post:
+      operationId: getPersonalAlertSubscription
+      summary: Read a person's alert subscription
+      description: >-
+        Requires alert_subscriptions:read and actors:resolve. Provider evidence
+        resolves the human and personal workspace server-side. The response holds
+        the subscription, or null when the person has none.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AlertSubscriptionSubjectRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/AlertSubscriptionResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/InputRejected"
+  /api/v1/alert-subscriptions/personal/save:
+    post:
+      operationId: savePersonalAlertSubscription
+      summary: Set a person's alert subscription
+      description: >-
+        Requires alert_subscriptions:manage and actors:resolve. The person must
+        be the active owner of their personal workspace. The position is a grid
+        cell, never a coordinate: the client derives the H3 resolution 6 cell
+        from the position it was given and sends only that. Saving replaces any
+        earlier subscription, so repeating a request is idempotent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AlertSubscriptionSaveRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/AlertSubscriptionResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/InputRejected"
+  /api/v1/alert-subscriptions/personal/clear:
+    post:
+      operationId: clearPersonalAlertSubscription
+      summary: Delete a person's alert subscription
+      description: >-
+        Requires alert_subscriptions:manage and actors:resolve. Deletes the
+        subscription and with it the last known cell; nothing about where the
+        person was is kept. Clearing when there is none succeeds.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AlertSubscriptionSubjectRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/AlertSubscriptionResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/InputRejected"
   /api/v1/publications/validate:
     post:
       operationId: validatePublication
@@ -446,6 +541,15 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/BotLifecycleResponse"
+    AlertSubscriptionResponse:
+      description: The person's alert subscription, or null when there is none
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/AlertSubscriptionResponse"
     BadRequest:
       description: Malformed JSON or invalid request shape
       headers:
@@ -693,6 +797,64 @@ components:
       properties:
         bot_instance:
           $ref: "#/components/schemas/BotLifecycleState"
+    AlertSubscriptionSubjectRequest:
+      $ref: "#/components/schemas/ActorOnboardingRequest"
+    AlertSubscriptionSaveRequest:
+      type: object
+      additionalProperties: false
+      required: [provider, provider_scope, subject_id, cell, categories, include_nearby]
+      properties:
+        provider:
+          type: string
+          pattern: "^[a-z][a-z0-9._-]{0,63}$"
+        provider_scope:
+          type: string
+          pattern: "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        subject_id:
+          type: string
+          minLength: 1
+          maxLength: 512
+        cell:
+          $ref: "#/components/schemas/AlertCell"
+        categories:
+          $ref: "#/components/schemas/AlertCategories"
+        include_nearby:
+          type: boolean
+    AlertCell:
+      type: string
+      description: >-
+        An H3 cell at resolution 6 (about 3 km across) as 15 lowercase
+        hexadecimal digits. The client derives it from the position; the Hub
+        never receives coordinates.
+      pattern: "^86[0-9a-f]{13}$"
+    AlertCategories:
+      type: array
+      minItems: 1
+      maxItems: 3
+      uniqueItems: true
+      items:
+        type: string
+        enum: [drone, bomb, missile]
+    AlertSubscriptionState:
+      type: object
+      additionalProperties: false
+      required: [cell, categories, include_nearby]
+      properties:
+        cell:
+          $ref: "#/components/schemas/AlertCell"
+        categories:
+          $ref: "#/components/schemas/AlertCategories"
+        include_nearby:
+          type: boolean
+    AlertSubscriptionResponse:
+      type: object
+      additionalProperties: false
+      required: [alert_subscription]
+      properties:
+        alert_subscription:
+          oneOf:
+            - $ref: "#/components/schemas/AlertSubscriptionState"
+            - type: "null"
     PublicationRequest:
       type: object
       additionalProperties: false

@@ -74,6 +74,23 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 --
+-- Name: alert_subscriptions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.alert_subscriptions (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    workspace_id uuid NOT NULL,
+    cell character varying(15) NOT NULL,
+    categories character varying[] NOT NULL,
+    include_nearby boolean DEFAULT true NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL,
+    CONSTRAINT alert_subscriptions_categories_check CHECK ((((cardinality(categories) >= 1) AND (cardinality(categories) <= 3)) AND (categories <@ ARRAY['drone'::character varying, 'bomb'::character varying, 'missile'::character varying]))),
+    CONSTRAINT alert_subscriptions_cell_check CHECK (((cell)::text ~ '^86[0-9a-f]{13}$'::text))
+);
+
+
+--
 -- Name: ar_internal_metadata; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -389,6 +406,14 @@ CREATE TABLE public.workspaces (
 
 
 --
+-- Name: alert_subscriptions alert_subscriptions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.alert_subscriptions
+    ADD CONSTRAINT alert_subscriptions_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: ar_internal_metadata ar_internal_metadata_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -522,6 +547,20 @@ ALTER TABLE ONLY public.workspace_memberships
 
 ALTER TABLE ONLY public.workspaces
     ADD CONSTRAINT workspaces_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: idx_alert_subscriptions_cell; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_alert_subscriptions_cell ON public.alert_subscriptions USING btree (cell);
+
+
+--
+-- Name: idx_alert_subscriptions_workspace; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_alert_subscriptions_workspace ON public.alert_subscriptions USING btree (workspace_id);
 
 
 --
@@ -871,6 +910,14 @@ ALTER TABLE ONLY public.bot_instance_lifecycle_events
 
 
 --
+-- Name: alert_subscriptions fk_rails_8971257eb2; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.alert_subscriptions
+    ADD CONSTRAINT fk_rails_8971257eb2 FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE RESTRICT;
+
+
+--
 -- Name: bot_instances fk_rails_90812beda1; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -933,6 +980,7 @@ ALTER TABLE ONLY public.social_account_accesses
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260930090000'),
 ('20260914020000'),
 ('20260913080000'),
 ('20260911203000'),

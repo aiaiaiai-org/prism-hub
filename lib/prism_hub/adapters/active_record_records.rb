@@ -19,6 +19,10 @@ module PrismHub
           class_name: "PrismHub::Adapters::ActiveRecordRecords::TelegramSurfaceBinding",
           inverse_of: :workspace,
           dependent: :restrict_with_exception
+        has_many :alert_subscriptions,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::AlertSubscription",
+          inverse_of: :workspace,
+          dependent: :restrict_with_exception
       end
 
       class ServicePrincipal < ::ActiveRecord::Base
@@ -162,6 +166,14 @@ module PrismHub
           class_name: "PrismHub::Adapters::ActiveRecordRecords::TelegramSurfaceBinding",
           inverse_of: :bot_instance,
           dependent: :restrict_with_exception
+      end
+
+      class AlertSubscription < ::ActiveRecord::Base
+        self.table_name = "alert_subscriptions"
+
+        belongs_to :workspace,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::Workspace",
+          inverse_of: :alert_subscriptions
       end
 
       class BotInstanceLifecycleEvent < ::ActiveRecord::Base

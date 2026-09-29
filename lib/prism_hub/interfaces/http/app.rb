@@ -9,6 +9,9 @@ module PrismHub
           /api/v1/actors/onboard
           /api/v1/actors/personal/resolve
           /api/v1/actors/resolve
+          /api/v1/alert-subscriptions/personal/clear
+          /api/v1/alert-subscriptions/personal/save
+          /api/v1/alert-subscriptions/personal/status
           /api/v1/bot-instances/personal/pause
           /api/v1/bot-instances/personal/resume
           /api/v1/bot-instances/personal/status
@@ -50,7 +53,7 @@ module PrismHub
           JsonResponse.error(403, error.code, error.message, details: error.details, request_id: request_id)
         rescue InputError, UnknownChannelError => error
           JsonResponse.error(input_status(error), error.code, error.message, details: error.details, request_id: request_id)
-        rescue BotInstanceConflictError, TelegramSurfaceBindingConflictError => error
+        rescue BotInstanceConflictError, AlertSubscriptionConflictError, TelegramSurfaceBindingConflictError => error
           JsonResponse.error(409, error.code, error.message, details: error.details, request_id: request_id)
         rescue TelegramSurfaceBindingNotFoundError => error
           JsonResponse.error(404, error.code, error.message, details: error.details, request_id: request_id)
@@ -82,7 +85,8 @@ module PrismHub
           case error.code
           when "hub.http.body.invalid_json", "hub.actor.request.invalid", "hub.actor.workspace_id.invalid",
             "hub.actor_onboarding.request.invalid", "hub.personal_actor.request.invalid",
-            "hub.bot_instance.request.invalid", "hub.telegram_surface_binding.request.invalid"
+            "hub.bot_instance.request.invalid", "hub.alert_subscription.request.invalid",
+            "hub.telegram_surface_binding.request.invalid"
             400
           when /^hub\.provider_subject\./
             400

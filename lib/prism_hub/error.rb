@@ -28,6 +28,7 @@ module PrismHub
   class WorkspaceMembershipNotFoundError < Error; end
   class BotInstanceConflictError < Error; end
   class BotInstanceNotFoundError < Error; end
+  class AlertSubscriptionConflictError < Error; end
   class TelegramSurfaceBindingConflictError < Error; end
   class TelegramSurfaceBindingNotFoundError < Error; end
   class PublicUserIdConflictError < Error; end

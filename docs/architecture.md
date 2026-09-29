@@ -115,6 +115,18 @@ logical context to a persisted Telegram surface binding and dispatching the
 verified chunks are separate application boundaries; this worker integration
 does not invent either one.
 
+## Alert subscriptions
+
+An alert subscription says where a person is, roughly, and what they want to hear about. It belongs to the person's personal workspace, one per workspace, and only the active workspace owner may set or clear it; the owner is rechecked under a workspace lock inside each change.
+
+The position is a grid cell and never a coordinate: H3 resolution 6, about 3 km across, as 15 lowercase hexadecimal digits. The client derives the cell from the position it was given and sends only the cell. The Hub has no way to receive coordinates and the table has no column that could hold one; a request carrying `lat` or `lon` is refused as malformed. The cell still sits next to an identity, so it is coarse but not anonymous, and a client should say so.
+
+`clear` deletes the row. Nothing about where the person was is kept, and no event history is written, unlike bot lifecycle.
+
+The categories are `drone`, `bomb`, and `missile`. The database checks the cell pattern and the category list as well as the domain does.
+
+Subscriptions are only stored. Reading alert sources, fusing them, and fanning assessments out to the cells subscriptions hold is a separate increment.
+
 ## Telegram surface bindings
 
 `TelegramSurfaceBinding` is the Hub-owned bridge from a Porter's logical context
