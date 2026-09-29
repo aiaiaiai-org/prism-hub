@@ -94,7 +94,7 @@ module PrismHub
           workspace: workspace,
           channel: @channel,
           assessment: assessment,
-          event_seq: event.fetch("seq"),
+          event: event,
           still_active: still_active
         )
         @outbox.enqueue(request: message.request, available_at: now)

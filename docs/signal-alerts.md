@@ -53,6 +53,7 @@ Queued in the outbox as a `prism-hub.delivery-request.v1` envelope with artifact
 
 ```json
 {
+  "schema_version": "prism-hub.signal-alert.v1",
   "event": "alert",
   "hazard": {"class": "drone", "kinds": ["air.attack_drone"]},
   "place": {"name": "Київ"},
@@ -60,12 +61,14 @@ Queued in the outbox as a `prism-hub.delivery-request.v1` envelope with artifact
   "likelihood": "moderate",
   "first_reported_at": "2026-09-30T11:59:00Z",
   "valid_until": "2026-09-30T12:29:00Z",
+  "event_at": "2026-09-30T11:59:00Z",
+  "event_url": "https://t.me/vanek_nikolaev/43222",
   "sources": [{"source_id": "telegram.channel:vanek_nikolaev", "url": "https://t.me/vanek_nikolaev/43222", "observed_at": "2026-09-30T11:59:00Z"}],
   "still_active": []
 }
 ```
 
-`event` is `alert` or `retraction`. `sources` holds the newest three reports. `still_active` is filled only for a retraction. The idempotency key is derived from the assessment, the workspace, and the kind, so a retry can never queue a second message.
+`event` is `alert` or `retraction`. `event_at` and `event_url` are the statement that caused this message: the post that reported the threat, or the one that called it off. `sources` holds the newest three reports. Porter (`signal.alert`, `prism-hub.signal-alert.v1`) renders it in Ukrainian. `still_active` is filled only for a retraction. The idempotency key is derived from the assessment, the workspace, and the kind, so a retry can never queue a second message.
 
 ## Configuration
 

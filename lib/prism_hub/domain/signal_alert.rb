@@ -10,14 +10,15 @@ module PrismHub
     # source did not make.
     class SignalAlert
       ARTIFACT_KIND = "signal.alert".freeze
+      SCHEMA_VERSION = "prism-hub.signal-alert.v1".freeze
       KINDS = %w[alert retraction].freeze
       CLASSES = %w[drone bomb missile].freeze
       MAX_SOURCES = 3
       MAX_STILL_ACTIVE = 5
 
-      attr_reader :kind, :workspace, :channel, :assessment_id, :hazard_class, :event_seq
+      attr_reader :kind, :workspace, :channel, :assessment_id, :hazard_class, :event_seq, :event_at
 
-      def initialize(kind:, workspace:, channel:, assessment:, event_seq:, still_active: [])
+      def initialize(kind:, workspace:, channel:, assessment:, event:, still_active: [])
         raise ArgumentError, "unknown alert kind" unless KINDS.include?(kind)
 
         @kind = kind
@@ -28,7 +29,9 @@ module PrismHub
         @hazard_class = assessment.fetch("class")
         raise ArgumentError, "unknown hazard class" unless CLASSES.include?(@hazard_class)
 
-        @event_seq = event_seq
+        @event = event
+        @event_seq = event.fetch("seq")
+        @event_at = event.fetch("effective_at")
         @still_active = still_active
         freeze
       end
@@ -45,6 +48,7 @@ module PrismHub
       def payload
         evidence = Array(@assessment["evidence"])
         {
+          "schema_version" => SCHEMA_VERSION,
           "event" => kind,
           "hazard" => {"class" => hazard_class, "kinds" => Array(@assessment["kinds"]).sort},
           "place" => {"name" => @assessment.dig("place", "name")},
@@ -52,6 +56,8 @@ module PrismHub
           "likelihood" => @assessment["likelihood"],
           "first_reported_at" => @assessment.fetch("valid_from"),
           "valid_until" => @assessment.fetch("valid_until"),
+          "event_at" => event_at,
+          "event_url" => @event.dig("evidence", "url"),
           "sources" => evidence.last(MAX_SOURCES).map { |item| source(item) },
           "still_active" => @still_active.first(MAX_STILL_ACTIVE)
         }

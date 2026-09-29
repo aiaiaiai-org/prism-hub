@@ -94,7 +94,9 @@ class FanOutSignalEventsTest < Minitest::Test
     assert_equal "alerts", request.channel
     assert_equal "signal.alert", request.artifact.fetch("artifact_kind")
     payload = request.artifact.fetch("payload")
+    assert_equal "prism-hub.signal-alert.v1", payload.fetch("schema_version")
     assert_equal "alert", payload.fetch("event")
+    assert_equal (NOW - 60).iso8601, payload.fetch("event_at")
     assert_equal "Київ", payload.dig("place", "name")
     assert_equal "drone", payload.dig("hazard", "class")
     assert_equal "https://t.me/vanek_nikolaev/100", payload.fetch("sources").last.fetch("url")
@@ -221,6 +223,7 @@ class FanOutSignalEventsTest < Minitest::Test
     assert_equal ["ws-a"], @outbox.requests.map(&:workspace)
     payload = @outbox.requests.first.artifact.fetch("payload")
     assert_equal "retraction", payload.fetch("event")
+    assert_equal "https://t.me/vanek_nikolaev/101", payload.fetch("event_url")
     assert_empty payload.fetch("still_active")
   end
 
@@ -369,6 +372,7 @@ class FanOutSignalEventsTest < Minitest::Test
   end
 
   def event(kind, seq, id: ID, at: NOW - 60)
-    {"assessment_id" => id, "seq" => seq, "kind" => kind, "effective_at" => at.iso8601}
+    evidence = {"source_id" => "telegram.channel:vanek_nikolaev", "evidence_id" => "vanek_nikolaev/101", "url" => "https://t.me/vanek_nikolaev/101"}
+    {"assessment_id" => id, "seq" => seq, "kind" => kind, "effective_at" => at.iso8601, "evidence" => evidence}
   end
 end
