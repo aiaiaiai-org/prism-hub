@@ -43,8 +43,32 @@ module PrismHub
         ::ActiveRecord::Base.transaction do
           workspace = locked_owned_workspace!(workspace_ref, actor_ref)
           ActiveRecordRecords::AlertSubscription.where(workspace: workspace).delete_all
+          # Which assessments someone was told about says where they were, so it goes with the
+          # subscription: nothing about a person's position is kept once they ask to stop.
+          ActiveRecordRecords::SignalAlertDelivery.where(workspace: workspace).delete_all
         end
         nil
+      end
+
+      def covering(cells:, category:)
+        return [] if cells.empty?
+
+        ActiveRecordRecords::AlertSubscription
+          .includes(:workspace)
+          .where(cell: cells)
+          .where("? = ANY(categories)", category)
+          .order(:created_at, :id)
+          .map { |record| to_domain(record) }
+      end
+
+      def find_all(workspace_ids:)
+        return [] if workspace_ids.empty?
+
+        ActiveRecordRecords::AlertSubscription
+          .includes(:workspace)
+          .joins(:workspace)
+          .where(workspaces: {identifier: workspace_ids})
+          .map { |record| to_domain(record) }
       end
 
       private

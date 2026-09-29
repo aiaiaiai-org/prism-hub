@@ -18,6 +18,15 @@ module PrismHub
       def clear(workspace_id:, actor_user_identity_id:, occurred_at:)
         raise NotImplementedError
       end
+
+      # Subscriptions standing in one of `cells` that asked about `category`.
+      def covering(cells:, category:)
+        raise NotImplementedError
+      end
+
+      def find_all(workspace_ids:)
+        raise NotImplementedError
+      end
     end
   end
 end

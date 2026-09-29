@@ -176,6 +176,21 @@ module PrismHub
           inverse_of: :alert_subscriptions
       end
 
+      class SignalEvidence < ::ActiveRecord::Base
+        self.table_name = "signal_evidence"
+      end
+
+      class SignalSourceCursor < ::ActiveRecord::Base
+        self.table_name = "signal_source_cursors"
+      end
+
+      class SignalAlertDelivery < ::ActiveRecord::Base
+        self.table_name = "signal_alert_deliveries"
+
+        belongs_to :workspace,
+          class_name: "PrismHub::Adapters::ActiveRecordRecords::Workspace"
+      end
+
       class BotInstanceLifecycleEvent < ::ActiveRecord::Base
         self.table_name = "bot_instance_lifecycle_events"
 

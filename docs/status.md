@@ -31,6 +31,7 @@
 - retained bot lifecycle events with validated state transitions;
 - personal bot lifecycle status, pause, and resume use cases and `v1` API operations;
 - personal alert subscriptions: one per personal workspace, holding a resolution 6 grid cell, up to three categories, and a nearby flag; `status`, `save`, and `clear` use cases and `v1` API operations behind `alert_subscriptions:read` and `alert_subscriptions:manage`; the owner is rechecked inside each change, and clearing deletes the row;
+- the signal loop (`bin/prism-hub-signal-scheduler`): reads configured sources with `prism-signal-collect poll`, keeps a window of evidence, assesses it with `prism-signal-runtime`, and queues `signal.alert` deliveries in the outbox for subscribers whose cell is covered; see `docs/signal-alerts.md`;
 - provider-global `SocialAccount` persistence keyed by immutable provider account identity;
 - separate retained `SocialAccountAccess` grants with `owner`, `manager`, and `publisher` roles;
 - account-access revocation that preserves history and forbids implicit reassignment,
@@ -73,7 +74,8 @@
 - an explicit grant-update use case;
 - provider-side OAuth credential revocation;
 - unattended mail scheduling or delivery;
-- reading alert sources, fusing them, and fanning assessments out to subscriptions (subscriptions are stored, nothing yet sends to them);
+- announcing that a source has gone quiet or unreadable: a failing source is logged and the loop continues, and users are not told;
+- a second alert source kind, or reading anything but public Telegram channels;
 - binding persisted social accounts to provider credentials and concrete publishing channels;
 - database-backed channel configuration, drafts, jobs, scheduling, approvals, audit history, or durable publication idempotency;
 - media ingest, storage, transformation, or media-reference resolution;

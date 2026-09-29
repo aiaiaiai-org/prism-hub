@@ -292,6 +292,52 @@ CREATE TABLE public.service_principals (
 
 
 --
+-- Name: signal_alert_deliveries; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.signal_alert_deliveries (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    workspace_id uuid NOT NULL,
+    assessment_id character varying(200) NOT NULL,
+    hazard_class character varying(16) NOT NULL,
+    delivery_kind character varying(16) NOT NULL,
+    event_seq integer NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL,
+    CONSTRAINT signal_alert_deliveries_class_check CHECK (((hazard_class)::text = ANY (ARRAY[('drone'::character varying)::text, ('bomb'::character varying)::text, ('missile'::character varying)::text]))),
+    CONSTRAINT signal_alert_deliveries_kind_check CHECK (((delivery_kind)::text = ANY (ARRAY[('alert'::character varying)::text, ('retraction'::character varying)::text])))
+);
+
+
+--
+-- Name: signal_evidence; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.signal_evidence (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    source_id character varying(200) NOT NULL,
+    external_id character varying(200) NOT NULL,
+    published_at timestamp(6) without time zone NOT NULL,
+    payload jsonb NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: signal_source_cursors; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.signal_source_cursors (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    source_id character varying(200) NOT NULL,
+    cursor character varying(200) NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
 -- Name: social_account_accesses; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -502,6 +548,30 @@ ALTER TABLE ONLY public.service_principals
 
 
 --
+-- Name: signal_alert_deliveries signal_alert_deliveries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.signal_alert_deliveries
+    ADD CONSTRAINT signal_alert_deliveries_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: signal_evidence signal_evidence_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.signal_evidence
+    ADD CONSTRAINT signal_evidence_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: signal_source_cursors signal_source_cursors_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.signal_source_cursors
+    ADD CONSTRAINT signal_source_cursors_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: social_account_accesses social_account_accesses_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -603,6 +673,48 @@ CREATE UNIQUE INDEX idx_mail_provider_credentials_identity ON public.mail_provid
 --
 
 CREATE UNIQUE INDEX idx_provider_identity_bindings_subject ON public.provider_identity_bindings USING btree (provider, provider_scope, subject_id);
+
+
+--
+-- Name: idx_signal_alert_deliveries_cooldown; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_signal_alert_deliveries_cooldown ON public.signal_alert_deliveries USING btree (workspace_id, hazard_class, created_at);
+
+
+--
+-- Name: idx_signal_alert_deliveries_created_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_signal_alert_deliveries_created_at ON public.signal_alert_deliveries USING btree (created_at);
+
+
+--
+-- Name: idx_signal_alert_deliveries_once; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_signal_alert_deliveries_once ON public.signal_alert_deliveries USING btree (assessment_id, workspace_id, delivery_kind);
+
+
+--
+-- Name: idx_signal_evidence_published_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_signal_evidence_published_at ON public.signal_evidence USING btree (published_at);
+
+
+--
+-- Name: idx_signal_evidence_source_external; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_signal_evidence_source_external ON public.signal_evidence USING btree (source_id, external_id);
+
+
+--
+-- Name: idx_signal_source_cursors_source; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_signal_source_cursors_source ON public.signal_source_cursors USING btree (source_id);
 
 
 --
@@ -862,6 +974,14 @@ ALTER TABLE ONLY public.social_account_accesses
 
 
 --
+-- Name: signal_alert_deliveries fk_rails_4d49e59993; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.signal_alert_deliveries
+    ADD CONSTRAINT fk_rails_4d49e59993 FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE RESTRICT;
+
+
+--
 -- Name: telegram_surface_bindings fk_rails_51472caa4b; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -980,6 +1100,7 @@ ALTER TABLE ONLY public.social_account_accesses
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260930100000'),
 ('20260930090000'),
 ('20260914020000'),
 ('20260913080000'),

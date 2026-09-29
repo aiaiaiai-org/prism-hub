@@ -125,7 +125,7 @@ The position is a grid cell and never a coordinate: H3 resolution 6, about 3 km 
 
 The categories are `drone`, `bomb`, and `missile`. The database checks the cell pattern and the category list as well as the domain does.
 
-Subscriptions are only stored. Reading alert sources, fusing them, and fanning assessments out to the cells subscriptions hold is a separate increment.
+Reading sources, assessing them, and telling subscribers is the signal loop, described in [`signal-alerts.md`](signal-alerts.md).
 
 ## Telegram surface bindings
 
