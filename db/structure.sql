@@ -207,7 +207,7 @@ CREATE TABLE public.delivery_outbox_entries (
     CONSTRAINT delivery_outbox_entries_delivered_at_check CHECK (((((status)::text = 'delivered'::text) AND (delivered_at IS NOT NULL)) OR ((status)::text <> 'delivered'::text))),
     CONSTRAINT delivery_outbox_entries_idempotency_key_check CHECK (((idempotency_key)::text ~ '^[0-9a-f]{64}$'::text)),
     CONSTRAINT delivery_outbox_entries_processing_lock_check CHECK (((((status)::text = 'processing'::text) AND (locked_at IS NOT NULL) AND (lock_token IS NOT NULL)) OR ((status)::text <> 'processing'::text))),
-    CONSTRAINT delivery_outbox_entries_status_check CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'processing'::character varying, 'delivered'::character varying, 'failed'::character varying])::text[]))),
+    CONSTRAINT delivery_outbox_entries_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('processing'::character varying)::text, ('delivered'::character varying)::text, ('failed'::character varying)::text]))),
     CONSTRAINT delivery_outbox_entries_workspace_check CHECK (((char_length(btrim((workspace)::text)) >= 1) AND (char_length(btrim((workspace)::text)) <= 100)))
 );
 
