@@ -21,6 +21,17 @@ All notable changes to Prism Hub will be documented here.
 
 ### Added
 
+- `POST /api/v1/telegram/surfaces/bind` is now part of the OpenAPI contract (API version
+  `0.1.0-alpha.10`), and `bot_instance_id` is optional: omitted, it is the calling bot's own
+  instance in that workspace. Bot instance identifiers are not part of the public API, so a client
+  could not have supplied one.
+- The signal loop: `bin/prism-hub-signal-scheduler` reads public Telegram channels through `prism-signal-collect poll`, keeps a window of evidence, assesses it with `prism-signal-runtime` (`prism-signal.v1`), and fans the result out to alert subscriptions by cell into the delivery outbox as `signal.alert` artifacts. An alert reaches a person once per assessment and at most once per cool-down per hazard class; a retraction reaches only the people who were told the alert, and names other reports that still cover them; an expiry says nothing. New tables `signal_evidence`, `signal_source_cursors`, and `signal_alert_deliveries`; clearing a subscription also deletes what the person was told. See `docs/signal-alerts.md`.
+- Personal alert subscriptions: one subscription per personal workspace holding a resolution 6 grid
+  cell (about 3 km), the categories (`drone`, `bomb`, `missile`) and a nearby-warnings flag. The client
+  derives the cell from a position and sends only the cell, so the Hub never receives coordinates.
+  `POST /api/v1/alert-subscriptions/personal/{status,save,clear}`, the
+  `alert_subscriptions:read` and `alert_subscriptions:manage` capabilities, and API version
+  `0.1.0-alpha.9`. Clearing deletes the row.
 - Idempotent provider-backed actor onboarding with public user IDs and personal workspaces.
 - Read-only provider-backed personal actor resolution for stateless clients.
 - Per-workspace persistent bot lifecycle state with audit history.

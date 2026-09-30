@@ -13,6 +13,10 @@ expected_operations = {
   ["/api/v1/actors/resolve", "post"] => "resolveActor",
   ["/api/v1/actors/onboard", "post"] => "onboardActor",
   ["/api/v1/actors/personal/resolve", "post"] => "resolvePersonalActor",
+  ["/api/v1/alert-subscriptions/personal/status", "post"] => "getPersonalAlertSubscription",
+  ["/api/v1/alert-subscriptions/personal/save", "post"] => "savePersonalAlertSubscription",
+  ["/api/v1/alert-subscriptions/personal/clear", "post"] => "clearPersonalAlertSubscription",
+  ["/api/v1/telegram/surfaces/bind", "post"] => "bindTelegramSurface",
   ["/api/v1/bot-instances/personal/status", "post"] => "getPersonalBotStatus",
   ["/api/v1/bot-instances/personal/pause", "post"] => "pausePersonalBot",
   ["/api/v1/bot-instances/personal/resume", "post"] => "resumePersonalBot",
@@ -28,7 +32,7 @@ lifecycle_routes = %w[
 ].freeze
 
 raise "OpenAPI version drift" unless contract.fetch("openapi") == "3.1.0"
-raise "Hub API metadata version drift" unless contract.dig("info", "version") == "0.1.0-alpha.8"
+raise "Hub API metadata version drift" unless contract.dig("info", "version") == "0.1.0-alpha.10"
 
 expected_operations.each do |(route, method), operation_id|
   actual = contract.dig("paths", route, method, "operationId")
@@ -52,6 +56,41 @@ lifecycle_routes.each do |route|
   unless request_ref == "#/components/schemas/BotLifecycleRequest"
     raise "POST #{route} must use the provider-evidence lifecycle request"
   end
+end
+
+alert_save = contract.dig("components", "schemas", "AlertSubscriptionSaveRequest")
+unless alert_save.fetch("additionalProperties") == false &&
+    alert_save.fetch("required").sort == %w[categories cell include_nearby provider provider_scope subject_id] &&
+    alert_save.fetch("properties").keys.sort == alert_save.fetch("required").sort
+  raise "alert subscription save request must carry provider evidence, a cell, categories, and the nearby flag"
+end
+
+alert_state = contract.dig("components", "schemas", "AlertSubscriptionState")
+unless alert_state.fetch("additionalProperties") == false &&
+    alert_state.fetch("required").sort == %w[categories cell include_nearby] &&
+    alert_state.fetch("properties").keys.sort == %w[categories cell include_nearby]
+  raise "alert subscription state must expose only what the person chose"
+end
+
+alert_cell = contract.dig("components", "schemas", "AlertCell", "pattern")
+raise "alert cells must be resolution 6 grid cells" unless alert_cell == "^86[0-9a-f]{13}$"
+
+alert_categories = contract.dig("components", "schemas", "AlertCategories", "items", "enum")
+unless alert_categories == PrismHub::Domain::AlertSubscription::CATEGORIES
+  raise "alert categories must match the domain vocabulary"
+end
+
+%w[status save clear].each do |operation|
+  route = "/api/v1/alert-subscriptions/personal/#{operation}"
+  responses = contract.dig("paths", route, "post", "responses")
+  raise "POST #{route} must declare 409" unless responses.key?("409")
+end
+
+bind_request = contract.dig("components", "schemas", "TelegramSurfaceBindRequest")
+unless bind_request.fetch("additionalProperties") == false &&
+    bind_request.fetch("required").sort == %w[chat_id logical_channel provider provider_scope subject_id workspace_id] &&
+    bind_request.fetch("properties").keys.sort == (bind_request.fetch("required") + %w[bot_instance_id message_thread_id]).sort
+  raise "surface bind request must carry provider evidence and a chat, with the bot instance optional"
 end
 
 actor_request = contract.dig("components", "schemas", "ActorResolutionRequest")

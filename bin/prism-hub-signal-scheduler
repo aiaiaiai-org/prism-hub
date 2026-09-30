@@ -1,0 +1,82 @@
+#!/usr/bin/env ruby
+# © 2026 aiaiaiai · aiaiaiai.org
+# SPDX-License-Identifier: Apache-2.0
+
+ENV["RAILS_ENV"] ||= "production"
+require_relative "../config/environment"
+
+def json_command(name, default)
+  command = JSON.parse(ENV.fetch(name, default))
+  return command if command.is_a?(Array) && command.any? && command.all? { |part| part.is_a?(String) && !part.empty? }
+
+  raise PrismHub::ConfigurationError.new(
+    "hub.signal.command.invalid",
+    "#{name} must be a non-empty JSON string array"
+  )
+end
+
+def positive_integer(name, default)
+  value = Integer(ENV.fetch(name, default), 10)
+  return value if value.positive?
+
+  raise ArgumentError
+rescue ArgumentError
+  raise PrismHub::ConfigurationError.new("hub.signal.setting.invalid", "#{name} must be a positive integer")
+end
+
+begin
+  logger = Logger.new($stdout)
+  sources = JSON.parse(ENV.fetch("PRISM_SIGNAL_SOURCES_JSON"))
+  unless sources.is_a?(Array) && sources.any?
+    raise PrismHub::ConfigurationError.new("hub.signal.sources.invalid", "PRISM_SIGNAL_SOURCES_JSON must list at least one source")
+  end
+
+  gateway = PrismHub::Adapters::SubprocessSignalGateway.new(
+    collect_command: json_command("PRISM_SIGNAL_COLLECT_COMMAND_JSON", '["prism-signal-collect"]'),
+    runtime_command: json_command("PRISM_SIGNAL_RUNTIME_COMMAND_JSON", '["prism-signal-runtime","--json"]'),
+    logger: logger,
+    timeout_seconds: positive_integer("PRISM_SIGNAL_TIMEOUT_SECONDS", "60")
+  )
+  ledger = PrismHub::Adapters::ActiveRecordSignalAlertLedger.new
+  fan_out = PrismHub::UseCases::FanOutSignalEvents.new(
+    subscription_repository: PrismHub::Adapters::ActiveRecordAlertSubscriptionRepository.new,
+    ledger: ledger,
+    binding_repository: PrismHub::Adapters::ActiveRecordTelegramSurfaceBindingRepository.new,
+    outbox_repository: PrismHub::Adapters::ActiveRecordDeliveryOutboxRepository.new,
+    logger: logger,
+    channel: ENV.fetch("PRISM_SIGNAL_ALERT_CHANNEL", "alerts"),
+    max_age_seconds: positive_integer("PRISM_SIGNAL_MAX_AGE_SECONDS", "1800"),
+    cooldown_seconds: positive_integer("PRISM_SIGNAL_COOLDOWN_SECONDS", "300")
+  )
+  ingest = PrismHub::UseCases::IngestSignals.new(
+    sources: sources.map { |source| PrismHub::Domain::SignalSource.from_h(source) },
+    gateway: gateway,
+    window_repository: PrismHub::Adapters::ActiveRecordSignalWindowRepository.new,
+    ledger: ledger,
+    fan_out: fan_out,
+    logger: logger,
+    window_seconds: positive_integer("PRISM_SIGNAL_WINDOW_SECONDS", "14400")
+  )
+  scheduler = PrismHub::UseCases::SignalScheduler.new(
+    ingest: ingest,
+    interval_seconds: positive_integer("PRISM_SIGNAL_INTERVAL_SECONDS", "60"),
+    logger: logger
+  )
+
+  %w[TERM INT].each { |signal| trap(signal) { scheduler.stop } }
+
+  if ENV["PRISM_SIGNAL_ONESHOT"] == "true"
+    scheduler.run_once
+  else
+    scheduler.run
+  end
+rescue JSON::ParserError
+  warn(JSON.generate(error: {code: "hub.command.invalid_json"}))
+  exit 1
+rescue KeyError => error
+  warn(JSON.generate(error: {code: "hub.configuration.missing", key: error.key}))
+  exit 1
+rescue PrismHub::Error => error
+  warn(JSON.generate(error: {code: error.code, details: error.details}))
+  exit 1
+end

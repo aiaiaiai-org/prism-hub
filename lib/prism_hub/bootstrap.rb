@@ -33,9 +33,15 @@ module PrismHub
           bot_instance_repository: Adapters::ActiveRecordBotInstanceRepository.new,
           clock: clock
         )
+        alert_subscription = UseCases::PersonalAlertSubscription.new(
+          resolve_personal_actor: resolve_personal_actor,
+          alert_subscription_repository: Adapters::ActiveRecordAlertSubscriptionRepository.new,
+          clock: clock
+        )
         bind_telegram_surface = UseCases::BindTelegramSurface.new(
           resolve_workspace_actor: resolve_actor,
-          binding_repository: binding_repository
+          binding_repository: binding_repository,
+          bot_instance_repository: Adapters::ActiveRecordBotInstanceRepository.new
         )
         validate = execution_use_case("validate", channels: channels, gateway: gateway)
         publish = execution_use_case("publish", channels: channels, gateway: gateway)
@@ -66,6 +72,12 @@ module PrismHub
             ["POST", "/api/v1/bot-instances/personal/status"] => lifecycle_endpoint(bot_lifecycle, :status, request_body),
             ["POST", "/api/v1/bot-instances/personal/pause"] => lifecycle_endpoint(bot_lifecycle, :pause, request_body),
             ["POST", "/api/v1/bot-instances/personal/resume"] => lifecycle_endpoint(bot_lifecycle, :resume, request_body),
+            ["POST", "/api/v1/alert-subscriptions/personal/status"] =>
+              alert_subscription_endpoint(alert_subscription, :status, request_body),
+            ["POST", "/api/v1/alert-subscriptions/personal/save"] =>
+              alert_subscription_endpoint(alert_subscription, :save, request_body),
+            ["POST", "/api/v1/alert-subscriptions/personal/clear"] =>
+              alert_subscription_endpoint(alert_subscription, :clear, request_body),
             ["POST", "/api/v1/telegram/surfaces/bind"] =>
               Interfaces::Http::TelegramSurfaceBindingEndpoint.new(
                 bind_telegram_surface: bind_telegram_surface,
@@ -98,6 +110,14 @@ module PrismHub
 
       def lifecycle_endpoint(lifecycle, operation, request_body)
         Interfaces::Http::PersonalBotLifecycleEndpoint.new(lifecycle: lifecycle, operation: operation, request_body: request_body)
+      end
+
+      def alert_subscription_endpoint(subscription, operation, request_body)
+        Interfaces::Http::PersonalAlertSubscriptionEndpoint.new(
+          subscription: subscription,
+          operation: operation,
+          request_body: request_body
+        )
       end
 
       def legacy_authentication(env, channels)

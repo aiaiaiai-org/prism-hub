@@ -10,6 +10,8 @@ module PrismHub
       ACTORS_ONBOARD = "actors:onboard".freeze
       BOT_INSTANCES_READ = "bot_instances:read".freeze
       BOT_INSTANCES_MANAGE = "bot_instances:manage".freeze
+      ALERT_SUBSCRIPTIONS_READ = "alert_subscriptions:read".freeze
+      ALERT_SUBSCRIPTIONS_MANAGE = "alert_subscriptions:manage".freeze
 
       ALL = [
         CHANNELS_READ,
@@ -18,7 +20,9 @@ module PrismHub
         ACTORS_RESOLVE,
         ACTORS_ONBOARD,
         BOT_INSTANCES_READ,
-        BOT_INSTANCES_MANAGE
+        BOT_INSTANCES_MANAGE,
+        ALERT_SUBSCRIPTIONS_READ,
+        ALERT_SUBSCRIPTIONS_MANAGE
       ].freeze
     end
   end

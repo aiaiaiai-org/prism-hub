@@ -74,6 +74,23 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 --
+-- Name: alert_subscriptions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.alert_subscriptions (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    workspace_id uuid NOT NULL,
+    cell character varying(15) NOT NULL,
+    categories character varying[] NOT NULL,
+    include_nearby boolean DEFAULT true NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL,
+    CONSTRAINT alert_subscriptions_categories_check CHECK (((cardinality(categories) >= 1) AND (cardinality(categories) <= 3) AND (categories <@ ARRAY['drone'::character varying, 'bomb'::character varying, 'missile'::character varying]))),
+    CONSTRAINT alert_subscriptions_cell_check CHECK (((cell)::text ~ '^86[0-9a-f]{13}$'::text))
+);
+
+
+--
 -- Name: ar_internal_metadata; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -190,7 +207,7 @@ CREATE TABLE public.delivery_outbox_entries (
     CONSTRAINT delivery_outbox_entries_delivered_at_check CHECK (((((status)::text = 'delivered'::text) AND (delivered_at IS NOT NULL)) OR ((status)::text <> 'delivered'::text))),
     CONSTRAINT delivery_outbox_entries_idempotency_key_check CHECK (((idempotency_key)::text ~ '^[0-9a-f]{64}$'::text)),
     CONSTRAINT delivery_outbox_entries_processing_lock_check CHECK (((((status)::text = 'processing'::text) AND (locked_at IS NOT NULL) AND (lock_token IS NOT NULL)) OR ((status)::text <> 'processing'::text))),
-    CONSTRAINT delivery_outbox_entries_status_check CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'processing'::character varying, 'delivered'::character varying, 'failed'::character varying])::text[]))),
+    CONSTRAINT delivery_outbox_entries_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('processing'::character varying)::text, ('delivered'::character varying)::text, ('failed'::character varying)::text]))),
     CONSTRAINT delivery_outbox_entries_workspace_check CHECK (((char_length(btrim((workspace)::text)) >= 1) AND (char_length(btrim((workspace)::text)) <= 100)))
 );
 
@@ -271,6 +288,52 @@ CREATE TABLE public.service_principals (
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
     CONSTRAINT service_principals_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('disabled'::character varying)::text])))
+);
+
+
+--
+-- Name: signal_alert_deliveries; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.signal_alert_deliveries (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    workspace_id uuid NOT NULL,
+    assessment_id character varying(200) NOT NULL,
+    hazard_class character varying(16) NOT NULL,
+    delivery_kind character varying(16) NOT NULL,
+    event_seq integer NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL,
+    CONSTRAINT signal_alert_deliveries_class_check CHECK (((hazard_class)::text = ANY ((ARRAY['drone'::character varying, 'bomb'::character varying, 'missile'::character varying])::text[]))),
+    CONSTRAINT signal_alert_deliveries_kind_check CHECK (((delivery_kind)::text = ANY ((ARRAY['alert'::character varying, 'retraction'::character varying])::text[])))
+);
+
+
+--
+-- Name: signal_evidence; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.signal_evidence (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    source_id character varying(200) NOT NULL,
+    external_id character varying(200) NOT NULL,
+    published_at timestamp(6) without time zone NOT NULL,
+    payload jsonb NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: signal_source_cursors; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.signal_source_cursors (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    source_id character varying(200) NOT NULL,
+    cursor character varying(200) NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
 );
 
 
@@ -389,6 +452,14 @@ CREATE TABLE public.workspaces (
 
 
 --
+-- Name: alert_subscriptions alert_subscriptions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.alert_subscriptions
+    ADD CONSTRAINT alert_subscriptions_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: ar_internal_metadata ar_internal_metadata_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -477,6 +548,30 @@ ALTER TABLE ONLY public.service_principals
 
 
 --
+-- Name: signal_alert_deliveries signal_alert_deliveries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.signal_alert_deliveries
+    ADD CONSTRAINT signal_alert_deliveries_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: signal_evidence signal_evidence_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.signal_evidence
+    ADD CONSTRAINT signal_evidence_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: signal_source_cursors signal_source_cursors_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.signal_source_cursors
+    ADD CONSTRAINT signal_source_cursors_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: social_account_accesses social_account_accesses_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -525,6 +620,20 @@ ALTER TABLE ONLY public.workspaces
 
 
 --
+-- Name: idx_alert_subscriptions_cell; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_alert_subscriptions_cell ON public.alert_subscriptions USING btree (cell);
+
+
+--
+-- Name: idx_alert_subscriptions_workspace; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_alert_subscriptions_workspace ON public.alert_subscriptions USING btree (workspace_id);
+
+
+--
 -- Name: idx_bot_instance_events_instance_time; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -564,6 +673,48 @@ CREATE UNIQUE INDEX idx_mail_provider_credentials_identity ON public.mail_provid
 --
 
 CREATE UNIQUE INDEX idx_provider_identity_bindings_subject ON public.provider_identity_bindings USING btree (provider, provider_scope, subject_id);
+
+
+--
+-- Name: idx_signal_alert_deliveries_cooldown; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_signal_alert_deliveries_cooldown ON public.signal_alert_deliveries USING btree (workspace_id, hazard_class, created_at);
+
+
+--
+-- Name: idx_signal_alert_deliveries_created_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_signal_alert_deliveries_created_at ON public.signal_alert_deliveries USING btree (created_at);
+
+
+--
+-- Name: idx_signal_alert_deliveries_once; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_signal_alert_deliveries_once ON public.signal_alert_deliveries USING btree (assessment_id, workspace_id, delivery_kind);
+
+
+--
+-- Name: idx_signal_evidence_published_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_signal_evidence_published_at ON public.signal_evidence USING btree (published_at);
+
+
+--
+-- Name: idx_signal_evidence_source_external; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_signal_evidence_source_external ON public.signal_evidence USING btree (source_id, external_id);
+
+
+--
+-- Name: idx_signal_source_cursors_source; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_signal_source_cursors_source ON public.signal_source_cursors USING btree (source_id);
 
 
 --
@@ -823,6 +974,14 @@ ALTER TABLE ONLY public.social_account_accesses
 
 
 --
+-- Name: signal_alert_deliveries fk_rails_4d49e59993; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.signal_alert_deliveries
+    ADD CONSTRAINT fk_rails_4d49e59993 FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE RESTRICT;
+
+
+--
 -- Name: telegram_surface_bindings fk_rails_51472caa4b; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -868,6 +1027,14 @@ ALTER TABLE ONLY public.telegram_surface_bindings
 
 ALTER TABLE ONLY public.bot_instance_lifecycle_events
     ADD CONSTRAINT fk_rails_87e739aa9f FOREIGN KEY (bot_instance_id) REFERENCES public.bot_instances(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: alert_subscriptions fk_rails_8971257eb2; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.alert_subscriptions
+    ADD CONSTRAINT fk_rails_8971257eb2 FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE RESTRICT;
 
 
 --
@@ -933,6 +1100,8 @@ ALTER TABLE ONLY public.social_account_accesses
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260930100000'),
+('20260930090000'),
 ('20260914020000'),
 ('20260913080000'),
 ('20260911203000'),
