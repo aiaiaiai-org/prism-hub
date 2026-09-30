@@ -81,4 +81,22 @@ The deployment chain is:
 The first arrow carries only deployment intent and a source ref. SSH material
 never crosses that boundary.
 
+## Container image
+
+`Dockerfile` builds the hub as one image, for a `container` workload of `aiaiaiai-org/infra`:
+
+- Ruby 4.0.6, the hub's gems, and `postgresql-client` for loading `db/structure.sql` into an empty database;
+- `prism-signal-collect` and `prism-signal-runtime`, built from `aiaiaiai-org/prism-signal` at a pinned commit (`PRISM_SIGNAL_REV`);
+- Porter, from `aiaiaiai-org/prism-porter` at a pinned commit (`PRISM_PORTER_REV`);
+- a non-root user, port `1927`, and `GET /healthz` without a credential.
+
+`bin/prism-hub-container` is the image's one process. It runs `rails db:prepare`, so migrations finish before anything serves, and then the web server, the delivery worker, and the signal scheduler together. If any of the three stops, the others are stopped and the container exits with its status, so the container runtime restarts it whole. A hub with a dead scheduler and a live web server would look healthy while telling nobody anything.
+
+The image holds no secret. Configuration is the environment: `DATABASE_URL`, `SECRET_KEY_BASE`, `PRISM_BOT_ORIGIN`, `PRISM_BOT_DELIVERY_SECRET`, `PRISM_SIGNAL_SOURCES_JSON`, and the rest of `.env.example`. The image sets the paths of Porter and the signal binaries, `PORT=1927`, and `RAILS_FORCE_SSL=false` because TLS ends at the edge.
+
+`.github/workflows/image.yml` proves the image builds on every pull request and publishes `ghcr.io/aiaiaiai-org/prism-hub:<commit>` on a merge to `master`. Publishing an image does not deploy it.
+
+Not yet done: the `prism-hub` workload contract in `aiaiaiai-org/infra`. Until it exists, **Deploy production** above has nothing to resolve, and a container workload is dispatched with an `image`, not a `ref`.
+
+
 <!-- © 2026 aiaiaiai · aiaiaiai.org -->

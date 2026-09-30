@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# © 2026 aiaiaiai · aiaiaiai.org
+# SPDX-License-Identifier: Apache-2.0
+#
+# The container's one process. It prepares the database, then runs the web server, the delivery
+# worker, and the signal scheduler side by side.
+#
+# If any of the three stops, the others are stopped and the container exits with its status, so the
+# container runtime restarts the whole thing. A hub with a dead scheduler and a live web server
+# would look healthy while telling nobody anything.
+set -Eeuo pipefail
+
+cd "$(dirname "$0")/.."
+
+commands=(
+  "bundle exec puma --config config/puma.rb"
+  "bin/prism-hub-signal-scheduler"
+)
+
+# Without a bot to deliver to, the worker has nothing to do and would exit, taking the hub down with
+# it. What the hub queues stays in the outbox and is delivered once a bot is configured.
+if [[ -n "${PRISM_BOT_ORIGIN:-}" ]]; then
+  commands+=("bin/prism-hub-delivery-worker")
+else
+  echo "PRISM_BOT_ORIGIN is not set: the delivery worker is not started; deliveries stay queued" >&2
+fi
+
+if [[ "${PRISM_HUB_SKIP_PREPARE:-false}" != "true" ]]; then
+  # Migrations finish before anything serves, so no release ever runs on an older schema.
+  bundle exec rails db:prepare
+fi
+
+pids=()
+for command in "${commands[@]}"; do
+  # shellcheck disable=SC2086 # the commands above are plain words, split on purpose
+  $command &
+  pids+=("$!")
+done
+
+stop() {
+  kill -TERM "${pids[@]}" 2>/dev/null || true
+  wait 2>/dev/null || true
+}
+
+trap 'stop; exit 143' TERM INT
+
+status=0
+wait -n || status=$?
+stop
+exit "$status"

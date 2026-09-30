@@ -52,7 +52,9 @@ jobs:
             'https://api.github.com/repos/aiaiaiai-org/infra/dispatches',
             '"event_type": "deploy-workload"',
             '"workload": "prism-hub"',
-            '"ref": os.environ["RELEASE_REF"]',
+            '"image": os.environ["RELEASE_IMAGE"]',
+            'ghcr.io/${GITHUB_REPOSITORY,,}:${sha}',
+            'packages: read',
             'aiaiaiai-org/infra',
           ]
           missing = required.reject { |fragment| deploy.include?(fragment) }
@@ -63,7 +65,9 @@ jobs:
           abort 'deploy workflow must not disable SSH host verification' if deploy.include?('StrictHostKeyChecking=no')
           abort 'validate workflow must not encode obsolete SSH deployment assumptions' if validate.include?('secrets.' + 'SSH_')
 
-          abort 'deploy workflow must delegate target resolution to infra' unless deploy.include?('target, SSH credentials, deployment path and service')
+          abort 'deploy workflow must delegate target resolution to infra' unless deploy.include?('target, network, secrets and activation: resolved by `aiaiaiai-org/infra`')
+          # prism-hub is a container workload: infra deploys an image, and the caller names no ref.
+          abort 'deploy workflow must dispatch an image, not a ref' if deploy.include?('"ref": os.environ')
           RUBY
 
       - name: Validate production runtime configuration

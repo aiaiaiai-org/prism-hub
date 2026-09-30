@@ -74,7 +74,8 @@ Queued in the outbox as a `prism-hub.delivery-request.v1` envelope with artifact
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `PRISM_SIGNAL_SOURCES_JSON` | required | `[{"kind":"telegram","channel":"<public username>"}]` |
+| `PRISM_SIGNAL_TELEGRAM_CHANNELS` | one of these two | public channel usernames, comma separated: `vanek_nikolaev,other` |
+| `PRISM_SIGNAL_SOURCES_JSON` | one of these two | `[{"kind":"telegram","channel":"<public username>"}]` |
 | `PRISM_SIGNAL_COLLECT_COMMAND_JSON` | `["prism-signal-collect"]` | collector command |
 | `PRISM_SIGNAL_RUNTIME_COMMAND_JSON` | `["prism-signal-runtime","--json"]` | runtime command |
 | `PRISM_SIGNAL_TIMEOUT_SECONDS` | 60 | per subprocess |
