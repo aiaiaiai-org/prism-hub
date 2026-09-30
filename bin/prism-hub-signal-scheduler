@@ -26,10 +26,10 @@ end
 
 begin
   logger = Logger.new($stdout)
-  sources = JSON.parse(ENV.fetch("PRISM_SIGNAL_SOURCES_JSON"))
-  unless sources.is_a?(Array) && sources.any?
-    raise PrismHub::ConfigurationError.new("hub.signal.sources.invalid", "PRISM_SIGNAL_SOURCES_JSON must list at least one source")
-  end
+  sources = PrismHub::Domain::SignalSource.list_from(
+    sources_json: ENV["PRISM_SIGNAL_SOURCES_JSON"],
+    telegram_channels: ENV["PRISM_SIGNAL_TELEGRAM_CHANNELS"]
+  )
 
   gateway = PrismHub::Adapters::SubprocessSignalGateway.new(
     collect_command: json_command("PRISM_SIGNAL_COLLECT_COMMAND_JSON", '["prism-signal-collect"]'),
@@ -49,7 +49,7 @@ begin
     cooldown_seconds: positive_integer("PRISM_SIGNAL_COOLDOWN_SECONDS", "300")
   )
   ingest = PrismHub::UseCases::IngestSignals.new(
-    sources: sources.map { |source| PrismHub::Domain::SignalSource.from_h(source) },
+    sources: sources,
     gateway: gateway,
     window_repository: PrismHub::Adapters::ActiveRecordSignalWindowRepository.new,
     ledger: ledger,

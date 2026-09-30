@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 concurrency:
   group: prism-hub-production
@@ -26,11 +27,12 @@ jobs:
     environment: production
 
     steps:
-      - name: Validate deployment ref
-        id: ref
+      - name: Resolve the release image
+        id: release
         shell: bash
         env:
           RELEASE_REF: ${{ inputs.ref }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
 
@@ -40,18 +42,35 @@ jobs:
             exit 64
           fi
 
-          if ! git ls-remote --exit-code "https://github.com/${GITHUB_REPOSITORY}.git" \
-            "refs/heads/${ref}" "refs/tags/${ref}" >/dev/null 2>&1; then
+          # The image is named by the commit it was built from, so a branch or tag is resolved to
+          # that commit first. Only a commit that reached master has a published image.
+          # An annotated tag points at a tag object; its peeled line (^{}) names the commit.
+          lines="$(git ls-remote "https://github.com/${GITHUB_REPOSITORY}.git" \
+            "refs/heads/${ref}" "refs/tags/${ref}" "refs/tags/${ref}^{}")"
+          sha="$(awk '$2 ~ /\^\{\}$/ {print $1; exit}' <<< "$lines")"
+          [[ -n "$sha" ]] || sha="$(awk 'NR == 1 {print $1}' <<< "$lines")"
+          if [[ ! "$sha" =~ ^[0-9a-f]{40}$ ]]; then
             echo "requested ref does not exist: ${ref}" >&2
             exit 64
           fi
 
-          echo "release_ref=$ref" >>"$GITHUB_OUTPUT"
+          image="ghcr.io/${GITHUB_REPOSITORY,,}:${sha}"
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin >/dev/null
+          if ! docker buildx imagetools inspect "$image" >/dev/null 2>&1; then
+            echo "no published image for ${ref} (${sha}); the Image workflow publishes one when a commit reaches master" >&2
+            exit 65
+          fi
+
+          echo "ref=$ref" >>"$GITHUB_OUTPUT"
+          echo "sha=$sha" >>"$GITHUB_OUTPUT"
+          echo "image=$image" >>"$GITHUB_OUTPUT"
 
       - name: Dispatch to aiaiaiai infra
         env:
           INFRA_DEPLOY_TOKEN: ${{ secrets.INFRA_DEPLOY_TOKEN }}
-          RELEASE_REF: ${{ steps.ref.outputs.release_ref }}
+          RELEASE_IMAGE: ${{ steps.release.outputs.image }}
+          RELEASE_REF: ${{ steps.release.outputs.ref }}
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -69,7 +88,7 @@ jobs:
               "event_type": "deploy-workload",
               "client_payload": {
                   "workload": "prism-hub",
-                  "ref": os.environ["RELEASE_REF"],
+                  "image": os.environ["RELEASE_IMAGE"],
               },
           }))
           PY
@@ -87,8 +106,8 @@ jobs:
           {
             echo '### Prism Hub production deployment'
             echo
-            echo "- infra workload: `prism-hub`"
-            echo "- release ref: `${RELEASE_REF}`"
-            echo "- target, SSH credentials, deployment path and service: resolved by `aiaiaiai-org/infra`"
-            echo "- activation: delegated to the infra workload contract"
+            echo '- infra workload: `prism-hub`'
+            echo "- release: \`${RELEASE_REF}\` at \`${RELEASE_SHA}\`"
+            echo "- image: \`${RELEASE_IMAGE}\`"
+            echo '- target, network, secrets and activation: resolved by `aiaiaiai-org/infra`'
           } >>"$GITHUB_STEP_SUMMARY"

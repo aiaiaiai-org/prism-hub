@@ -14,9 +14,16 @@ cd "$(dirname "$0")/.."
 
 commands=(
   "bundle exec puma --config config/puma.rb"
-  "bin/prism-hub-delivery-worker"
   "bin/prism-hub-signal-scheduler"
 )
+
+# Without a bot to deliver to, the worker has nothing to do and would exit, taking the hub down with
+# it. What the hub queues stays in the outbox and is delivered once a bot is configured.
+if [[ -n "${PRISM_BOT_ORIGIN:-}" ]]; then
+  commands+=("bin/prism-hub-delivery-worker")
+else
+  echo "PRISM_BOT_ORIGIN is not set: the delivery worker is not started; deliveries stay queued" >&2
+fi
 
 if [[ "${PRISM_HUB_SKIP_PREPARE:-false}" != "true" ]]; then
   # Migrations finish before anything serves, so no release ever runs on an older schema.
