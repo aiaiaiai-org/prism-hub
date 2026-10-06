@@ -1,5 +1,15 @@
 # Human identity
 
+> **Ecosystem identity.** Under [ECO-0001: Shared identity and connected
+> providers](https://github.com/aiaiaiai-org/.github/blob/main/ecosystem/identity/DESIGN.md),
+> the 0x1 identity service becomes the single identity authority for the
+> aiaiaiai ecosystem. Prism Hub will then refer to people by that authority's
+> stable `subject_id` and verify its signed tokens. It will stop creating
+> `UserIdentity` and `ProviderIdentityBinding` records and allocating public
+> IDs. The model below describes the current implementation until that
+> migration lands. The full design and its machine-readable version are
+> maintained only in `aiaiaiai-org/.github`.
+
 Prism Hub separates human identity from machine identity.
 
 `ServicePrincipal` answers which client process is calling Hub. `UserIdentity`
