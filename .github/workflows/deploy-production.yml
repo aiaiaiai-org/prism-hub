@@ -124,7 +124,6 @@ jobs:
                   "workload": "prism-hub",
                   "image": os.environ["RELEASE_IMAGE"],
                   "source_repository": os.environ["GITHUB_REPOSITORY"],
-                  "ref": os.environ["RELEASE_SHA"],
                   "secrets_age": os.environ["ENCRYPTED_SECRETS"],
               },
           }))
