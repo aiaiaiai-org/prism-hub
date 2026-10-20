@@ -65,6 +65,34 @@ jobs:
           echo "sha=$sha" >>"$GITHUB_OUTPUT"
           echo "image=$image" >>"$GITHUB_OUTPUT"
 
+      - name: Encrypt Prism Hub credentials for its target Environment
+        env:
+          PRISM_POSTGRES_PASSWORD: ${{ secrets.PRISM_POSTGRES_PASSWORD }}
+          PRISM_HUB_SECRET_KEY_BASE: ${{ secrets.PRISM_HUB_SECRET_KEY_BASE }}
+          INFRA_AGE_RECIPIENT: ${{ vars.INFRA_AGE_RECIPIENT }}
+          REGISTRY_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          test -n "$PRISM_POSTGRES_PASSWORD"
+          test -n "$PRISM_HUB_SECRET_KEY_BASE"
+          test -n "$INFRA_AGE_RECIPIENT"
+          for name in PRISM_POSTGRES_PASSWORD PRISM_HUB_SECRET_KEY_BASE; do
+            [[ "${!name}" != *$'\n'* && "${!name}" != *$'\r'* ]] || exit 1
+          done
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq age
+          {
+            printf 'PRISM_POSTGRES_PASSWORD=%s\n' "$PRISM_POSTGRES_PASSWORD"
+            printf 'PRISM_HUB_SECRET_KEY_BASE=%s\n' "$PRISM_HUB_SECRET_KEY_BASE"
+            printf 'GHCR_PULL_USER=%s\n' "$GITHUB_ACTOR"
+            printf 'GHCR_PULL_TOKEN=%s\n' "$REGISTRY_TOKEN"
+          } > "$RUNNER_TEMP/prism-hub-source.env"
+          age --armor --recipient "$INFRA_AGE_RECIPIENT" \
+            --output "$RUNNER_TEMP/prism-hub-secret.age" "$RUNNER_TEMP/prism-hub-source.env"
+          rm -f "$RUNNER_TEMP/prism-hub-source.env"
+
       - name: Dispatch to aiaiaiai infra
         env:
           INFRA_DEPLOY_TOKEN: ${{ secrets.INFRA_DEPLOY_TOKEN }}
@@ -75,6 +103,12 @@ jobs:
         run: |
           set -Eeuo pipefail
 
+          if [[ ! -s "$RUNNER_TEMP/prism-hub-secret.age" ]]; then
+            echo "Encrypted Prism Hub credentials are missing" >&2
+            exit 78
+          fi
+          ENCRYPTED_SECRETS="$(cat "$RUNNER_TEMP/prism-hub-secret.age")"
+          export ENCRYPTED_SECRETS
           if [[ -z "${INFRA_DEPLOY_TOKEN:-}" ]]; then
             echo "INFRA_DEPLOY_TOKEN is required in the production Environment" >&2
             exit 78
@@ -89,6 +123,8 @@ jobs:
               "client_payload": {
                   "workload": "prism-hub",
                   "image": os.environ["RELEASE_IMAGE"],
+                  "source_repository": os.environ["GITHUB_REPOSITORY"],
+                  "secrets_age": os.environ["ENCRYPTED_SECRETS"],
               },
           }))
           PY
@@ -102,6 +138,8 @@ jobs:
             --header "X-GitHub-Api-Version: 2022-11-28" \
             --header "Content-Type: application/json" \
             --data "$payload"
+
+          rm -f "$RUNNER_TEMP/prism-hub-secret.age"
 
           {
             echo '### Prism Hub production deployment'

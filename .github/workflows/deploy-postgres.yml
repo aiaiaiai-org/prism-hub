@@ -1,0 +1,45 @@
+# © 2026 aiaiaiai · aiaiaiai.org
+#
+# Operator-only database activation. The DB password is owned by Prism Hub,
+# and reaches infra only inside an age-encrypted deployment request.
+name: Deploy Prism PostgreSQL
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prism-postgres-production
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    environment:
+      name: production
+    env:
+      INFRA_DEPLOY_TOKEN: ${{ secrets.INFRA_DEPLOY_TOKEN }}
+      INFRA_AGE_RECIPIENT: ${{ vars.INFRA_AGE_RECIPIENT }}
+      PRISM_POSTGRES_PASSWORD: ${{ secrets.PRISM_POSTGRES_PASSWORD }}
+    steps:
+      - name: Dispatch encrypted PostgreSQL credential
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          for name in INFRA_DEPLOY_TOKEN INFRA_AGE_RECIPIENT PRISM_POSTGRES_PASSWORD; do
+            test -n "${!name:-}" || { echo "::error::Missing $name" >&2; exit 1; }
+          done
+          [[ "$PRISM_POSTGRES_PASSWORD" != *$'\n'* && "$PRISM_POSTGRES_PASSWORD" != *$'\r'* ]] || exit 1
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq age
+          trap 'rm -f "$RUNNER_TEMP/pg-source.env" "$RUNNER_TEMP/pg-secrets.age" "$RUNNER_TEMP/pg-dispatch.json"' EXIT
+          printf 'PRISM_POSTGRES_PASSWORD=%s\n' "$PRISM_POSTGRES_PASSWORD" > "$RUNNER_TEMP/pg-source.env"
+          age --armor --recipient "$INFRA_AGE_RECIPIENT" --output "$RUNNER_TEMP/pg-secrets.age" "$RUNNER_TEMP/pg-source.env"
+          jq -n --rawfile envelope "$RUNNER_TEMP/pg-secrets.age"             '{event_type: "deploy-workload", client_payload: {
+              workload: "prism-postgres", secrets_age: $envelope
+            }}' > "$RUNNER_TEMP/pg-dispatch.json"
+          GH_TOKEN="$INFRA_DEPLOY_TOKEN" gh api --method POST             repos/aiaiaiai-org/infra/dispatches --input "$RUNNER_TEMP/pg-dispatch.json"
+          echo "Prism PostgreSQL deployment requested (not confirmed). Verify infra Deploy workload." >> "$GITHUB_STEP_SUMMARY"
