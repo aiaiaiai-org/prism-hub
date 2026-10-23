@@ -109,7 +109,7 @@ class ActiveRecordSignalThreatRegistryTest < Minitest::Test
     assert_equal ["telegram.channel:war_monitor"], records.first.active_sources
 
     @registry.sync(assessments: [old], now: T0 + 120)
-    assert_equal ["telegram.channel:war_monitor"], records.first.active_sources
+    assert_nil records.first.active_sources
   end
 
   def test_a_source_must_be_cited_before_it_can_be_live
