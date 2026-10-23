@@ -180,6 +180,10 @@ module PrismHub
         self.table_name = "signal_evidence"
       end
 
+      class SignalThreatRecord < ::ActiveRecord::Base
+        self.table_name = "signal_threat_records"
+      end
+
       class SignalSourceCursor < ::ActiveRecord::Base
         self.table_name = "signal_source_cursors"
       end

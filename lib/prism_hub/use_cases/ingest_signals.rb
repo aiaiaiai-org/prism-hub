@@ -11,11 +11,12 @@ module PrismHub
       Result = Struct.new(:read, :failed_sources, :summary, keyword_init: true)
       MAX_EVIDENCE = 500
 
-      def initialize(sources:, gateway:, window_repository:, ledger:, fan_out:, logger:,
+      def initialize(sources:, gateway:, window_repository:, threat_registry:, ledger:, fan_out:, logger:,
         window_seconds: 14_400, ledger_retention_seconds: 86_400)
         @sources = sources
         @gateway = gateway
         @window = window_repository
+        @threat_registry = threat_registry
         @ledger = ledger
         @fan_out = fan_out
         @logger = logger
@@ -36,6 +37,8 @@ module PrismHub
         since = now - @window_seconds
         @window.prune(before: since)
         assessed = @gateway.assess(evidence: @window.since(time: since, limit: MAX_EVIDENCE), evaluation_time: now)
+        # Register first: a send must refer to an incident we can later audit.
+        @threat_registry.sync(assessments: assessed.assessments, now: now)
         summary = @fan_out.call(assessments: assessed.assessments, events: assessed.events, now: now)
         @ledger.prune(before: now - @ledger_retention_seconds)
         Result.new(read: read, failed_sources: failed, summary: summary)

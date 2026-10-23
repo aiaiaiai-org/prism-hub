@@ -37,6 +37,52 @@ Also:
 - **A chat is required.** A subscriber with no active Telegram surface bound to the logical channel (default `alerts`) is skipped.
 - **One failure is one failure.** A delivery that cannot be queued is logged and left unrecorded, so the next pass tries again while the event is recent. Everyone else is unaffected.
 
+## Threat incident registry
+
+Prism Hub persists each distinct assessment as a **threat incident** in
+`signal_threat_records` before attempting to fan out a notification.
+
+- `id` is a durable server-generated UUID (`threat_id`). The existing
+  `assessment_id` is the unique idempotency key for an episode. Neither contains
+  a subscriber identifier or Telegram chat ID.
+- `hazard_class` and `hazard_kinds` describe what the sources reported.
+- `first_reported_at` is the timestamp of the first source report,
+  `last_reported_at` is the latest contributing report, and `created_at`
+  is when Hub first registered the incident. These are distinct concepts.
+- `destination_id` and `destination_name` are the **reported named place**
+  for the assessment, not a predicted strike location. Each existing Fusion
+  assessment describes one place; reports at different places remain separate
+  episodes unless Fusion explicitly links them. The registry never stores
+  geographic coordinates.
+- `status` is `active`, `expired` or `retracted`. A missing report may
+  become `expired` after its validity window; expiry is **not** an all-clear.
+  The record retains the attribution URLs and report timestamps even after
+  the rolling ingestion window is pruned.
+- `source_reports` is a **JSONB array of source-reported threat messages**, not
+  a single source or a count. Each entry has `source_id`, `evidence_id`,
+  `url`, and `observed_at`. The pair (`source_id`, `evidence_id`) is the
+  deduplication key; one channel may report multiple messages, and the full
+  history remains after a channel clears or expires. Explicit clears are
+  source-specific Fusion events; they are not forged as threat reports.
+- `active_sources` is a **separate nullable JSONB array** of unique, sorted
+  channel IDs whose source reports are unexpired and uncleared as of the last
+  assessment evaluation. `NULL` means an older Signal runtime did not supply
+  this field; `[]` means no live source remains. It is not a list of verified
+  independent observations, and source count is not a probability of impact.
+- `reported_arrival_from`, `reported_arrival_until` and `arrival_source_url`
+  are nullable, jointly validated placeholders for an explicitly sourced
+  arrival window. **The current pipeline never populates them.** It does not
+  estimate a route, compute an impact time from distance/TTL, or invent an ETA.
+  Any later source-reported estimate needs a separately reviewed extraction
+  contract and visible uncertainty.
+
+The registry is independent of users, subscriptions, delivery and workspace
+identity. It is persistent audit state, not a live operational track. An
+`assessment_id` can change when its first evidence leaves the 4-hour Fusion
+window; until a cross-window episode-identity contract exists, an old and new
+record can refer to the same continuing situation. Do not claim global incident
+deduplication or prediction precision.
+
 ## What is stored
 
 | Table | Holds | Why |
@@ -44,6 +90,7 @@ Also:
 | `signal_evidence` | the posts in the window, as the collector emitted them | assessments are recomputed from it |
 | `signal_source_cursors` | the newest post read per source | resume without rereading |
 | `signal_alert_deliveries` | `(assessment, workspace, kind)` | once-only, cool-down, and whom a retraction reaches |
+| `signal_threat_records` | incident UUID, source history, live channel IDs and lifecycle | auditable source-only journal without subscriber identity |
 
 The ledger holds a workspace and an assessment id. An assessment id names a class and a place, so it implies where someone was. It is therefore deleted after 24 h and whenever the person clears their subscription. The queued message carries the place the report is about and never the person's cell.
 
@@ -90,7 +137,7 @@ A channel name is checked against Telegram's rules for a public username before 
 
 ## Limits
 
-- The sources are unofficial and the reading is heuristic. The window and the runtime cannot make a report true; alerts and retractions are proposals from a channel, and Porter's wording must say so.
+- The sources are unofficial and the reading is heuristic. The window and the runtime cannot make a report true; alerts and retractions are proposals from channels, and Porter's wording must say so. Neither `retracted` nor `expired` represents an **official air-raid all-clear**. `likelihood` and channel count are not calibrated risk or proof of independent reporting.
 - A stale or unreadable source is logged and not announced. Silence from the hub is not safety.
 - An episode that outlives the window is re-identified once its first post is dropped, so a person may be told again after the cool-down. That is a true statement about an ongoing threat.
 - Alerts are only as good as the subscription's cell: about 3 km, and the cover already adds one ring of margin.

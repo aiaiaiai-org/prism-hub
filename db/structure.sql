@@ -304,8 +304,8 @@ CREATE TABLE public.signal_alert_deliveries (
     event_seq integer NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
-    CONSTRAINT signal_alert_deliveries_class_check CHECK (((hazard_class)::text = ANY ((ARRAY['drone'::character varying, 'bomb'::character varying, 'missile'::character varying])::text[]))),
-    CONSTRAINT signal_alert_deliveries_kind_check CHECK (((delivery_kind)::text = ANY ((ARRAY['alert'::character varying, 'retraction'::character varying])::text[])))
+    CONSTRAINT signal_alert_deliveries_class_check CHECK (((hazard_class)::text = ANY (ARRAY[('drone'::character varying)::text, ('bomb'::character varying)::text, ('missile'::character varying)::text]))),
+    CONSTRAINT signal_alert_deliveries_kind_check CHECK (((delivery_kind)::text = ANY (ARRAY[('alert'::character varying)::text, ('retraction'::character varying)::text])))
 );
 
 
@@ -334,6 +334,38 @@ CREATE TABLE public.signal_source_cursors (
     cursor character varying(200) NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: signal_threat_records; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.signal_threat_records (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    assessment_id character varying(200) NOT NULL,
+    hazard_class character varying(16) NOT NULL,
+    hazard_kinds character varying[] DEFAULT '{}'::character varying[] NOT NULL,
+    destination_id character varying(200),
+    destination_name character varying(200),
+    status character varying(16) NOT NULL,
+    first_reported_at timestamp(6) without time zone NOT NULL,
+    last_reported_at timestamp(6) without time zone NOT NULL,
+    valid_until timestamp(6) without time zone NOT NULL,
+    last_evaluated_at timestamp(6) without time zone NOT NULL,
+    source_reports jsonb DEFAULT '[]'::jsonb NOT NULL,
+    active_sources jsonb,
+    reported_arrival_from timestamp(6) without time zone,
+    reported_arrival_until timestamp(6) without time zone,
+    arrival_source_url character varying(2048),
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL,
+    CONSTRAINT signal_threat_records_active_sources_array_check CHECK (((active_sources IS NULL) OR (jsonb_typeof(active_sources) = 'array'::text))),
+    CONSTRAINT signal_threat_records_arrival_provenance_check CHECK ((((reported_arrival_from IS NULL) AND (reported_arrival_until IS NULL) AND (arrival_source_url IS NULL)) OR ((reported_arrival_from IS NOT NULL) AND (reported_arrival_until IS NOT NULL) AND (reported_arrival_from <= reported_arrival_until) AND (arrival_source_url IS NOT NULL)))),
+    CONSTRAINT signal_threat_records_class_check CHECK (((hazard_class)::text = ANY ((ARRAY['drone'::character varying, 'bomb'::character varying, 'missile'::character varying])::text[]))),
+    CONSTRAINT signal_threat_records_report_order_check CHECK ((last_reported_at >= first_reported_at)),
+    CONSTRAINT signal_threat_records_reports_array_check CHECK ((jsonb_typeof(source_reports) = 'array'::text)),
+    CONSTRAINT signal_threat_records_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'expired'::character varying, 'retracted'::character varying])::text[])))
 );
 
 
@@ -572,6 +604,14 @@ ALTER TABLE ONLY public.signal_source_cursors
 
 
 --
+-- Name: signal_threat_records signal_threat_records_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.signal_threat_records
+    ADD CONSTRAINT signal_threat_records_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: social_account_accesses social_account_accesses_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -715,6 +755,20 @@ CREATE UNIQUE INDEX idx_signal_evidence_source_external ON public.signal_evidenc
 --
 
 CREATE UNIQUE INDEX idx_signal_source_cursors_source ON public.signal_source_cursors USING btree (source_id);
+
+
+--
+-- Name: idx_signal_threat_records_assessment; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_signal_threat_records_assessment ON public.signal_threat_records USING btree (assessment_id);
+
+
+--
+-- Name: idx_signal_threat_records_status_expiry; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_signal_threat_records_status_expiry ON public.signal_threat_records USING btree (status, valid_until);
 
 
 --
@@ -1100,6 +1154,7 @@ ALTER TABLE ONLY public.social_account_accesses
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20261023070000'),
 ('20260930100000'),
 ('20260930090000'),
 ('20260914020000'),
