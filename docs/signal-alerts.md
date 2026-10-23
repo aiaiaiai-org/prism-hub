@@ -37,6 +37,41 @@ Also:
 - **A chat is required.** A subscriber with no active Telegram surface bound to the logical channel (default `alerts`) is skipped.
 - **One failure is one failure.** A delivery that cannot be queued is logged and left unrecorded, so the next pass tries again while the event is recent. Everyone else is unaffected.
 
+## Threat incident registry
+
+Prism Hub persists each distinct assessment as a **threat incident** in
+`signal_threat_records` before attempting to fan out a notification.
+
+- `id` is a durable server-generated UUID (`threat_id`). The existing
+  `assessment_id` is the unique idempotency key for an episode. Neither contains
+  a subscriber identifier or Telegram chat ID.
+- `hazard_class` and `hazard_kinds` describe what the sources reported.
+- `first_reported_at` is the timestamp of the first source report,
+  `last_reported_at` is the latest contributing report, and `created_at`
+  is when Hub first registered the incident. These are distinct concepts.
+- `destination_id` and `destination_name` are the **reported named place**
+  for the assessment, not a predicted strike location. Each existing Fusion
+  assessment describes one place; reports at different places remain separate
+  episodes unless Fusion explicitly links them. The registry never stores
+  geographic coordinates.
+- `status` is `active`, `expired` or `retracted`. A missing report may
+  become `expired` after its validity window; expiry is **not** an all-clear.
+  The record retains the attribution URLs and report timestamps even after
+  the rolling ingestion window is pruned.
+- `reported_arrival_from`, `reported_arrival_until` and `arrival_source_url`
+  are nullable, jointly validated placeholders for an explicitly sourced
+  arrival window. **The current pipeline never populates them.** It does not
+  estimate a route, compute an impact time from distance/TTL, or invent an ETA.
+  Any later source-reported estimate needs a separately reviewed extraction
+  contract and visible uncertainty.
+
+The registry is independent of users, subscriptions, delivery and workspace
+identity. It is persistent audit state, not a live operational track. An
+`assessment_id` can change when its first evidence leaves the 4-hour Fusion
+window; until a cross-window episode-identity contract exists, an old and new
+record can refer to the same continuing situation. Do not claim global incident
+deduplication or prediction precision.
+
 ## What is stored
 
 | Table | Holds | Why |
