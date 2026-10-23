@@ -50,7 +50,7 @@ module PrismHub
         ActiveRecordRecords::SignalThreatRecord
           .where(status: "active")
           .where("valid_until <= ?", now)
-          .update_all(status: "expired", last_evaluated_at: now, updated_at: now)
+          .update_all(status: "expired", active_sources: [], last_evaluated_at: now, updated_at: now)
         registered
       end
 
