@@ -73,6 +73,46 @@ class HttpBotDeliveryGatewayTest < Minitest::Test
     assert_equal "hub.bot.delivery.unavailable", error.code
   end
 
+  def test_delivery_prefix_preserves_origin_payload_authentication_and_idempotency
+    requests = ["", "/hua-bot"].map do |prefix|
+      transport = FakeTransport.new([response_for("sent")])
+      gateway = PrismHub::Adapters::HttpBotDeliveryGateway.new(
+        origin: "https://api.example.test", secret: "secret", path_prefix: prefix, transport: transport
+      )
+      gateway.deliver(intent: intent_for(["test notification"]), binding: binding_for)
+      transport.requests.fetch(0)
+    end
+    assert_equal "https://api.example.test/api/v1/delivery", requests[0].fetch(:uri).to_s
+    assert_equal "https://api.example.test/hua-bot/api/v1/delivery", requests[1].fetch(:uri).to_s
+    assert_equal requests[0].fetch(:body), requests[1].fetch(:body)
+    assert_equal requests[0].fetch(:headers), requests[1].fetch(:headers)
+  end
+
+  def test_rejects_noncanonical_delivery_prefixes_before_transport
+    [nil, 12, "/", "hua-bot", "/hua-bot/", "//host", "/../bot", "/a/./b",
+      "/a%2fb", "/a?b", "/a#b", "/a\\\\b", "/a\n", "/" + "a" * 200].each do |prefix|
+      transport = FakeTransport.new([])
+      error = assert_raises(PrismHub::ConfigurationError) do
+        PrismHub::Adapters::HttpBotDeliveryGateway.new(
+          origin: "https://api.example.test", secret: "secret", path_prefix: prefix, transport: transport
+        )
+      end
+      assert_equal "hub.bot.path_prefix.invalid", error.code
+      assert_empty transport.requests
+    end
+  end
+
+  def test_prefix_does_not_relax_https_origin_validation
+    ["http://api.example.test", "https://api.example.test/hua-bot",
+      "https://user:pass@api.example.test", "https://api.example.test?q=1"].each do |origin|
+      assert_raises(PrismHub::ConfigurationError) do
+        PrismHub::Adapters::HttpBotDeliveryGateway.new(
+          origin: origin, secret: "secret", path_prefix: "/hua-bot"
+        )
+      end
+    end
+  end
+
   private
 
   def gateway_for(transport)
