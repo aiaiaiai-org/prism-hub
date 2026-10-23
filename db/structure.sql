@@ -304,8 +304,8 @@ CREATE TABLE public.signal_alert_deliveries (
     event_seq integer NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
-    CONSTRAINT signal_alert_deliveries_class_check CHECK (((hazard_class)::text = ANY ((ARRAY['drone'::character varying, 'bomb'::character varying, 'missile'::character varying])::text[]))),
-    CONSTRAINT signal_alert_deliveries_kind_check CHECK (((delivery_kind)::text = ANY ((ARRAY['alert'::character varying, 'retraction'::character varying])::text[])))
+    CONSTRAINT signal_alert_deliveries_class_check CHECK (((hazard_class)::text = ANY (ARRAY[('drone'::character varying)::text, ('bomb'::character varying)::text, ('missile'::character varying)::text]))),
+    CONSTRAINT signal_alert_deliveries_kind_check CHECK (((delivery_kind)::text = ANY (ARRAY[('alert'::character varying)::text, ('retraction'::character varying)::text])))
 );
 
 
@@ -319,6 +319,19 @@ CREATE TABLE public.signal_evidence (
     external_id character varying(200) NOT NULL,
     published_at timestamp(6) without time zone NOT NULL,
     payload jsonb NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: signal_source_cursors; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.signal_source_cursors (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    source_id character varying(200) NOT NULL,
+    cursor character varying(200) NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL
 );
@@ -350,19 +363,6 @@ CREATE TABLE public.signal_threat_records (
     CONSTRAINT signal_threat_records_class_check CHECK (((hazard_class)::text = ANY ((ARRAY['drone'::character varying, 'bomb'::character varying, 'missile'::character varying])::text[]))),
     CONSTRAINT signal_threat_records_report_order_check CHECK ((last_reported_at >= first_reported_at)),
     CONSTRAINT signal_threat_records_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'expired'::character varying, 'retracted'::character varying])::text[])))
-);
-
-
---
--- Name: signal_source_cursors; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.signal_source_cursors (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    source_id character varying(200) NOT NULL,
-    cursor character varying(200) NOT NULL,
-    created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
 );
 
 
@@ -593,19 +593,19 @@ ALTER TABLE ONLY public.signal_evidence
 
 
 --
--- Name: signal_threat_records signal_threat_records_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.signal_threat_records
-    ADD CONSTRAINT signal_threat_records_pkey PRIMARY KEY (id);
-
-
---
 -- Name: signal_source_cursors signal_source_cursors_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.signal_source_cursors
     ADD CONSTRAINT signal_source_cursors_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: signal_threat_records signal_threat_records_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.signal_threat_records
+    ADD CONSTRAINT signal_threat_records_pkey PRIMARY KEY (id);
 
 
 --
@@ -748,6 +748,13 @@ CREATE UNIQUE INDEX idx_signal_evidence_source_external ON public.signal_evidenc
 
 
 --
+-- Name: idx_signal_source_cursors_source; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_signal_source_cursors_source ON public.signal_source_cursors USING btree (source_id);
+
+
+--
 -- Name: idx_signal_threat_records_assessment; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -759,13 +766,6 @@ CREATE UNIQUE INDEX idx_signal_threat_records_assessment ON public.signal_threat
 --
 
 CREATE INDEX idx_signal_threat_records_status_expiry ON public.signal_threat_records USING btree (status, valid_until);
-
-
---
--- Name: idx_signal_source_cursors_source; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX idx_signal_source_cursors_source ON public.signal_source_cursors USING btree (source_id);
 
 
 --
