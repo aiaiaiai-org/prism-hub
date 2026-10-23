@@ -66,6 +66,7 @@ class IngestSignalsTest < Minitest::Test
     first = @ingest.call(now: NOW)
     second = @ingest.call(now: NOW + 60)
 
+    assert_equal 1, PrismHub::Adapters::ActiveRecordRecords::SignalThreatRecord.count
     assert_equal 1, first.summary.alerts
     assert_equal 0, second.summary.alerts
     entries = PrismHub::Adapters::ActiveRecordRecords::DeliveryOutboxEntry.all.to_a
@@ -136,7 +137,8 @@ class IngestSignalsTest < Minitest::Test
       logger: @logger
     )
     PrismHub::UseCases::IngestSignals.new(
-      sources: [SOURCE], gateway: @gateway, window_repository: @window, ledger: @ledger,
+      sources: [SOURCE], gateway: @gateway, window_repository: @window,
+      threat_registry: PrismHub::Adapters::ActiveRecordSignalThreatRegistry.new, ledger: @ledger,
       fan_out: fan_out, logger: @logger
     )
   end
@@ -176,7 +178,7 @@ class IngestSignalsTest < Minitest::Test
   def clear_tables
     connection = ActiveRecord::Base.connection
     %w[
-      delivery_outbox_entries signal_alert_deliveries signal_evidence signal_source_cursors
+      delivery_outbox_entries signal_alert_deliveries signal_threat_records signal_evidence signal_source_cursors
       telegram_surface_bindings bot_instance_lifecycle_events bot_instances service_principals alert_subscriptions
       workspace_memberships provider_identity_bindings user_identities workspaces
     ].each do |table|
