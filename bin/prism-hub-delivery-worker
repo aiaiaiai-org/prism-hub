@@ -18,7 +18,8 @@ begin
   )
   delivery_gateway = PrismHub::Adapters::HttpBotDeliveryGateway.new(
     origin: ENV.fetch("PRISM_BOT_ORIGIN"),
-    secret: ENV.fetch("PRISM_BOT_DELIVERY_SECRET")
+    secret: ENV.fetch("PRISM_BOT_DELIVERY_SECRET"),
+    path_prefix: ENV.fetch("PRISM_BOT_PATH_PREFIX", "")
   )
   porter_command = JSON.parse(ENV.fetch("PRISM_PORTER_COMMAND_JSON", '["prism-porter"]'))
   unless porter_command.is_a?(Array) && porter_command.any? &&
