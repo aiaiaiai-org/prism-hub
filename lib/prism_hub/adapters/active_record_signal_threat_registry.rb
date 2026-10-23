@@ -120,7 +120,8 @@ module PrismHub
           # The arrival window intentionally stays NULL: no ETA is inferred from text,
           # coordinates, or TTL. Only an explicitly sourced future contract may set it.
         }
-        data[:active_sources] = live_sources.uniq.sort unless live_sources.nil?
+        # Unknown on the current pass must not retain a stale previous live snapshot.
+        data[:active_sources] = live_sources&.uniq&.sort
         data
       end
 
