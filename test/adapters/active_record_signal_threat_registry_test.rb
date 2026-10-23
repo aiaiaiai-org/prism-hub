@@ -30,6 +30,8 @@ class ActiveRecordSignalThreatRegistryTest < Minitest::Test
     assert_equal T0 - 60, record.last_reported_at
     assert_equal "active", record.status
     assert_equal ["telegram.channel:war_monitor"], record.source_reports.map { |source| source.fetch("source_id") }
+    assert_equal ["telegram.channel:war_monitor"], record.active_sources
+    assert_kind_of Array, record.source_reports
     assert_nil record.reported_arrival_from
     assert_nil record.reported_arrival_until
     assert_nil record.arrival_source_url
@@ -43,6 +45,7 @@ class ActiveRecordSignalThreatRegistryTest < Minitest::Test
   def test_two_sources_keep_distinct_reports_and_do_not_get_weighted_by_name
     later = assessment
     later["evidence"] << evidence("kpszsu", 101, T0)
+    later["active_sources"] = %w[telegram.channel:war_monitor telegram.channel:kpszsu]
     later["valid_until"] = (T0 + 1800).iso8601
     @registry.sync(assessments: [later], now: T0 + 60)
 
@@ -50,6 +53,7 @@ class ActiveRecordSignalThreatRegistryTest < Minitest::Test
     assert_equal ["telegram.channel:war_monitor", "telegram.channel:kpszsu"].sort,
       result.source_reports.map { |source| source.fetch("source_id") }.sort
     assert_equal T0, result.last_reported_at
+    assert_equal %w[telegram.channel:kpszsu telegram.channel:war_monitor], result.active_sources
     assert_equal ASSESSMENT, result.assessment_id
   end
 
@@ -59,6 +63,7 @@ class ActiveRecordSignalThreatRegistryTest < Minitest::Test
 
     record = records.first
     assert_equal "expired", record.status
+    assert_equal [], record.active_sources
     assert_equal T0 - 60, record.first_reported_at
     assert_nil record.reported_arrival_from
   end
@@ -67,9 +72,66 @@ class ActiveRecordSignalThreatRegistryTest < Minitest::Test
     @registry.sync(assessments: [assessment], now: T0)
     cancelled = assessment
     cancelled["status"] = "retracted"
+    cancelled["active_sources"] = []
     @registry.sync(assessments: [cancelled], now: T0 + 60)
     @registry.sync(assessments: [assessment], now: T0 + 120)
     assert_equal "retracted", records.first.status
+    assert_equal [], records.first.active_sources
+    assert_equal 1, records.first.source_reports.length
+  end
+
+
+  def test_source_history_survives_a_partial_clear_but_active_sources_change
+    initial = assessment
+    initial["evidence"] << evidence("kpszsu", 2, T0)
+    initial["active_sources"] = ["telegram.channel:kpszsu", "telegram.channel:war_monitor"]
+    @registry.sync(assessments: [initial], now: T0)
+
+    after_clear = assessment
+    after_clear["evidence"] << evidence("kpszsu", 2, T0)
+    after_clear["active_sources"] = ["telegram.channel:war_monitor"]
+    @registry.sync(assessments: [after_clear], now: T0 + 60)
+
+    record = records.first
+    assert_equal 2, record.source_reports.size
+    assert_equal ["telegram.channel:war_monitor"], record.active_sources
+    assert_equal "active", record.status
+  end
+
+  def test_older_runtime_reports_unknown_active_sources_instead_of_zero
+    old = assessment
+    old.delete("active_sources")
+    @registry.sync(assessments: [old], now: T0)
+    assert_nil records.first.active_sources
+
+    fresh = assessment
+    @registry.sync(assessments: [fresh], now: T0 + 60)
+    assert_equal ["telegram.channel:war_monitor"], records.first.active_sources
+
+    @registry.sync(assessments: [old], now: T0 + 120)
+    assert_equal ["telegram.channel:war_monitor"], records.first.active_sources
+  end
+
+  def test_a_source_must_be_cited_before_it_can_be_live
+    invalid = assessment
+    invalid["active_sources"] = ["telegram.channel:kpszsu"]
+    assert_raises(ArgumentError) { @registry.sync(assessments: [invalid], now: T0) }
+    assert_equal 0, records.count
+  end
+
+  def test_active_sources_must_agree_with_terminal_state
+    bad = assessment
+    bad["status"] = "retracted"
+    assert_raises(ArgumentError) { @registry.sync(assessments: [bad], now: T0) }
+    assert_equal 0, records.count
+  end
+
+  def test_database_enforces_json_array_shape_for_reports
+    @registry.sync(assessments: [assessment], now: T0)
+    record = records.first
+    assert_raises(ActiveRecord::StatementInvalid) do
+      ActiveRecord::Base.transaction(requires_new: true) { record.update_columns(source_reports: {}) }
+    end
   end
 
   def test_exact_coordinates_are_never_recorded_as_a_named_destination
@@ -103,7 +165,8 @@ class ActiveRecordSignalThreatRegistryTest < Minitest::Test
       "status" => "active",
       "valid_from" => (T0 - 60).iso8601,
       "valid_until" => (T0 + 1800).iso8601,
-      "evidence" => [evidence("war_monitor", 100, T0 - 60)]
+      "evidence" => [evidence("war_monitor", 100, T0 - 60)],
+      "active_sources" => ["telegram.channel:war_monitor"]
     }
   end
 end
