@@ -52,6 +52,7 @@ begin
     sources: sources,
     gateway: gateway,
     window_repository: PrismHub::Adapters::ActiveRecordSignalWindowRepository.new,
+    threat_registry: PrismHub::Adapters::ActiveRecordSignalThreatRegistry.new,
     ledger: ledger,
     fan_out: fan_out,
     logger: logger,
