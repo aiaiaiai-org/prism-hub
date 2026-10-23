@@ -77,7 +77,9 @@ module PrismHub
           (destination_name.is_a?(String) && destination_name.length <= 200)
 
         from = timestamp(value.fetch("valid_from"))
-        evidence = Array(value.fetch("evidence"))
+        evidence = value.fetch("evidence")
+        raise ArgumentError, "evidence must be an array" unless evidence.is_a?(Array)
+
         reports = evidence.map do |item|
           {
             "source_id" => item.fetch("source_id"),
@@ -86,7 +88,25 @@ module PrismHub
             "observed_at" => timestamp(item.fetch("observed_at")).iso8601
           }
         end
-        {
+        # A missing field means the producer predates source-status support.
+        # In particular, never conflate "unknown" (nil) with "none live" ([]).
+        # Each active ID is one channel identity, not a verified independent report.
+        live_sources = nil
+        if value.key?("active_sources")
+          live_sources = value.fetch("active_sources")
+          raise ArgumentError, "active_sources must be an array" unless live_sources.is_a?(Array)
+          unless live_sources.all? { |source| source.is_a?(String) && source.match?(/\A[a-z0-9_.-]+:[a-z0-9_.-]+\z/) }
+            raise ArgumentError, "invalid active source identifier"
+          end
+          unless (live_sources - reports.map { |report| report.fetch("source_id") }).empty?
+            raise ArgumentError, "active source without evidence"
+          end
+          if (status == "active" && live_sources.empty?) || (status != "active" && live_sources.any?)
+            raise ArgumentError, "active sources disagree with status"
+          end
+        end
+
+        data = {
           assessment_id: id,
           hazard_class: hazard_class,
           hazard_kinds: kinds.uniq.sort,
@@ -100,6 +120,8 @@ module PrismHub
           # The arrival window intentionally stays NULL: no ETA is inferred from text,
           # coordinates, or TTL. Only an explicitly sourced future contract may set it.
         }
+        data[:active_sources] = live_sources.uniq.sort unless live_sources.nil?
+        data
       end
 
       def timestamp(text)
