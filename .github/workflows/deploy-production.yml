@@ -69,6 +69,7 @@ jobs:
         env:
           PRISM_POSTGRES_PASSWORD: ${{ secrets.PRISM_POSTGRES_PASSWORD }}
           PRISM_HUB_SECRET_KEY_BASE: ${{ secrets.PRISM_HUB_SECRET_KEY_BASE }}
+          PRISM_BOT_DELIVERY_SECRET: ${{ secrets.PRISM_BOT_DELIVERY_SECRET }}
           INFRA_AGE_RECIPIENT: ${{ vars.INFRA_AGE_RECIPIENT }}
           REGISTRY_TOKEN: ${{ github.token }}
         shell: bash
@@ -77,8 +78,9 @@ jobs:
           umask 077
           test -n "$PRISM_POSTGRES_PASSWORD"
           test -n "$PRISM_HUB_SECRET_KEY_BASE"
+          test -n "$PRISM_BOT_DELIVERY_SECRET"
           test -n "$INFRA_AGE_RECIPIENT"
-          for name in PRISM_POSTGRES_PASSWORD PRISM_HUB_SECRET_KEY_BASE; do
+          for name in PRISM_POSTGRES_PASSWORD PRISM_HUB_SECRET_KEY_BASE PRISM_BOT_DELIVERY_SECRET; do
             [[ "${!name}" != *$'\n'* && "${!name}" != *$'\r'* ]] || exit 1
           done
           sudo apt-get update -qq
@@ -86,6 +88,7 @@ jobs:
           {
             printf 'PRISM_POSTGRES_PASSWORD=%s\n' "$PRISM_POSTGRES_PASSWORD"
             printf 'PRISM_HUB_SECRET_KEY_BASE=%s\n' "$PRISM_HUB_SECRET_KEY_BASE"
+            printf 'PRISM_BOT_DELIVERY_SECRET=%s\n' "$PRISM_BOT_DELIVERY_SECRET"
             printf 'GHCR_PULL_USER=%s\n' "$GITHUB_ACTOR"
             printf 'GHCR_PULL_TOKEN=%s\n' "$REGISTRY_TOKEN"
           } > "$RUNNER_TEMP/prism-hub-source.env"

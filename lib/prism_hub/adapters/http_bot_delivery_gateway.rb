@@ -11,8 +11,9 @@ module PrismHub
 
       Response = Data.define(:status, :body)
 
-      def initialize(origin:, secret:, transport: nil)
+      def initialize(origin:, secret:, path_prefix: "", transport: nil)
         @origin = normalized_origin(origin)
+        @path_prefix = normalized_path_prefix(path_prefix)
         @secret = required_secret(secret)
         @transport = transport || method(:request)
       end
@@ -31,7 +32,7 @@ module PrismHub
         idempotency_key = Digest::SHA256.hexdigest(
           [intent.idempotency_key, chunk.position].join("\0")
         )
-        uri = URI.parse("#{@origin}#{DELIVERY_PATH}")
+        uri = URI.parse("#{@origin}#{@path_prefix}#{DELIVERY_PATH}")
         raw = @transport.call(
           uri: uri,
           headers: {
@@ -162,6 +163,17 @@ module PrismHub
         raise ConfigurationError.new(
           "hub.bot.origin.invalid",
           "PRISM_BOT_ORIGIN must be an HTTPS origin without path, credentials, query, or fragment"
+        )
+      end
+
+      def normalized_path_prefix(value)
+        # Restrict to canonical path segments; reject traversal, escaping and URL components.
+        return value.freeze if value.is_a?(String) && value.bytesize <= 200 &&
+          (value.empty? || value.match?(%r{\A(?:/[A-Za-z0-9_-]+)+\z}))
+
+        raise ConfigurationError.new(
+          "hub.bot.path_prefix.invalid",
+          "PRISM_BOT_PATH_PREFIX must be empty or slash-separated alphanumeric, underscore or hyphen segments"
         )
       end
 
