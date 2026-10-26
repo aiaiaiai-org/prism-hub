@@ -115,7 +115,7 @@ Queued in the outbox as a `prism-hub.delivery-request.v1` envelope with artifact
 }
 ```
 
-`event` is `alert` or `retraction`. `event_at` and `event_url` are the statement that caused this message: the post that reported the threat, or the one that called it off. `sources` holds the newest three reports. Porter (`signal.alert`, `prism-hub.signal-alert.v1`) renders it in Ukrainian. `still_active` is filled only for a retraction. The idempotency key is derived from the assessment, the workspace, and the kind, so a retry can never queue a second message.
+`event` is `alert` or `retraction`. `event_at` and `event_url` are the statement that caused this message: the post that reported the threat, or the one that called it off. `sources` contains at most eight **different channel identifiers**, each represented by its newest source report. When `active_sources` is available, active channels are selected first; if absent (older runtime), citations fall back to one latest report per channel. A frequent poster cannot suppress the other configured sources. The full historical `source_reports` array is preserved separately in the threat registry. Porter (`signal.alert`, `prism-hub.signal-alert.v1`) renders it in Ukrainian. `still_active` is filled only for a retraction. The idempotency key is derived from the assessment, the workspace, and the kind, so a retry can never queue a second message.
 
 ## Configuration
 

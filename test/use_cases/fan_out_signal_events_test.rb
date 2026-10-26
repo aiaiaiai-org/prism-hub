@@ -102,6 +102,56 @@ class FanOutSignalEventsTest < Minitest::Test
     assert_equal "https://t.me/vanek_nikolaev/100", payload.fetch("sources").last.fetch("url")
   end
 
+  def test_each_live_channel_is_cited_even_when_one_posts_much_more_often
+    channels = %w[kpszsu war_monitor monitorwarr vanek_nikolaev]
+    item = assessment
+    item["active_sources"] = channels.map { |channel| "telegram.channel:#{channel}" }
+    item["evidence"] = channels.each_with_index.map do |channel, index|
+      source_evidence(channel, 100, NOW - 120 + index)
+    end
+    (101..110).each do |number|
+      item["evidence"] << source_evidence("vanek_nikolaev", number, NOW - 60 + number - 101)
+    end
+
+    fan_out([item], [event("issued", 1)])
+
+    sources = @outbox.requests.first.artifact.fetch("payload").fetch("sources")
+    assert_equal channels.sort, sources.map { |source| source.fetch("source_id").split(":").last }.sort
+    assert_equal 4, sources.length
+    assert_equal "https://t.me/vanek_nikolaev/110",
+      sources.find { |source| source.fetch("source_id") == "telegram.channel:vanek_nikolaev" }.fetch("url")
+  end
+
+  def test_sources_only_cite_live_channels_if_fusion_supplied_status
+    item = assessment
+    item["evidence"] = [
+      source_evidence("kpszsu", 100, NOW - 120),
+      source_evidence("war_monitor", 101, NOW - 80)
+    ]
+    item["active_sources"] = ["telegram.channel:war_monitor"]
+
+    fan_out([item], [event("issued", 1)])
+
+    sources = @outbox.requests.first.artifact.fetch("payload").fetch("sources")
+    assert_equal ["telegram.channel:war_monitor"], sources.map { |source| source.fetch("source_id") }
+  end
+
+  def test_old_runtime_without_live_sources_still_cites_distinct_channels
+    item = assessment
+    item["evidence"] = [
+      source_evidence("kpszsu", 100, NOW - 120),
+      source_evidence("kpszsu", 101, NOW - 100),
+      source_evidence("war_monitor", 102, NOW - 80)
+    ]
+
+    fan_out([item], [event("issued", 1)])
+
+    sources = @outbox.requests.first.artifact.fetch("payload").fetch("sources")
+    assert_equal 2, sources.length
+    assert_equal ["telegram.channel:kpszsu", "telegram.channel:war_monitor"],
+      sources.map { |source| source.fetch("source_id") }
+  end
+
   def test_the_message_carries_no_position
     fan_out([assessment], [event("issued", 1)])
 
@@ -368,6 +418,15 @@ class FanOutSignalEventsTest < Minitest::Test
           "observed_at" => (NOW - 60).iso8601
         }
       ]
+    }
+  end
+
+  def source_evidence(channel, number, at)
+    {
+      "source_id" => "telegram.channel:#{channel}",
+      "evidence_id" => "#{channel}/#{number}",
+      "url" => "https://t.me/#{channel}/#{number}",
+      "observed_at" => at.iso8601
     }
   end
 
