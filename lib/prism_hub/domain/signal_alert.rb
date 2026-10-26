@@ -13,7 +13,7 @@ module PrismHub
       SCHEMA_VERSION = "prism-hub.signal-alert.v1".freeze
       KINDS = %w[alert retraction].freeze
       CLASSES = %w[drone bomb missile].freeze
-      MAX_SOURCES = 3
+      MAX_SOURCES = 8
       MAX_STILL_ACTIVE = 5
 
       attr_reader :kind, :workspace, :channel, :assessment_id, :hazard_class, :event_seq, :event_at
@@ -46,7 +46,6 @@ module PrismHub
       end
 
       def payload
-        evidence = Array(@assessment["evidence"])
         {
           "schema_version" => SCHEMA_VERSION,
           "event" => kind,
@@ -58,7 +57,7 @@ module PrismHub
           "valid_until" => @assessment.fetch("valid_until"),
           "event_at" => event_at,
           "event_url" => @event.dig("evidence", "url"),
-          "sources" => evidence.last(MAX_SOURCES).map { |item| source(item) },
+          "sources" => cited_sources,
           "still_active" => @still_active.first(MAX_STILL_ACTIVE)
         }
       end
@@ -79,6 +78,25 @@ module PrismHub
       end
 
       private
+
+      # The newest report per channel, not the newest N posts globally: a chatty channel
+      # must not displace a quieter independent channel in the alert's citations.
+      # The full message history is retained by the Hub incident registry.
+      def cited_sources
+        recent = Array(@assessment["evidence"])
+          .sort_by { |item| [Time.iso8601(item.fetch("observed_at")), item.fetch("source_id"), item.fetch("evidence_id")] }
+          .reverse
+          .uniq { |item| item.fetch("source_id") }
+
+        # An older Signal binary omits the field; keep backward-compatible citations.
+        live = @assessment["active_sources"]
+        if kind == "alert" && live.is_a?(Array)
+          selected = recent.select { |item| live.include?(item.fetch("source_id")) }
+          recent = selected unless selected.empty?
+        end
+
+        recent.first(MAX_SOURCES).reverse.map { |item| source(item) }
+      end
 
       def source(item)
         {
