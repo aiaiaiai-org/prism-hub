@@ -16,7 +16,7 @@ Every interval (default 60 s):
 
 1. Each source is read with `prism-signal-collect telegram <channel> poll --after <cursor>`. The evidence is stored, and the cursor moves to the newest post seen. It never moves back. A source that cannot be read is logged and skipped; the pass continues.
 2. Evidence older than the window (default 4 h) is dropped.
-3. The window, at most 500 items, is sent to `prism-signal-runtime`: `normalize`, then `assess` with `fusion.v1`. The runtime is stateless, so the window is recomputed every pass and the same posts give the same events.
+3. The ingestion window is capped at 500 items **shared fairly across configured sources**, with a maximum of `floor(500 / source_count)` newest reports per channel. The reports are sorted chronologically before being sent to `prism-signal-runtime`: `normalize`, then `assess` with `fusion.v1`. One high-volume channel cannot evict all evidence from quieter channels. The cap may still discard older posts from a very busy channel; window truncation never implies an official all-clear. The runtime is stateless, so the same sampled window gives the same assessment.
 4. The events are fanned out (below), and ledger entries older than 24 h are deleted.
 
 A pass that fails is logged and the loop goes on. A scheduler that dies leaves people without alerts and without any sign of it.

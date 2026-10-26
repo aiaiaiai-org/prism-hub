@@ -29,9 +29,10 @@ module PrismHub
         evidence.length
       end
 
-      def since(time:, limit:)
-        ActiveRecordRecords::SignalEvidence
-          .where("published_at >= ?", time)
+      def since(time:, limit:, source_id: nil)
+        scope = ActiveRecordRecords::SignalEvidence.where("published_at >= ?", time)
+        scope = scope.where(source_id: source_id) if source_id
+        scope
           .order(published_at: :desc, external_id: :desc)
           .limit(limit)
           .map(&:payload)
