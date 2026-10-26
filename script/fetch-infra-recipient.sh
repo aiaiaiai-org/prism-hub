@@ -79,17 +79,7 @@ test -s "$public_key"
 ssh-keygen -lf "$public_key" >/dev/null
 recipient="$(cat "$public_key")"
 # A first line plus an unterminated second line may pass wc -l.
-[[ "$recipient" != *[[ "$recipient" =~ ^ssh-(ed25519|rsa)\ [A-Za-z0-9+/=]+([[:space:]].*)?$ ]] || {
-  echo "::error::Invalid public encryption recipient." >&2
-  exit 1
-}
-printf 'key=%s\n' "$recipient" >> "$GITHUB_OUTPUT"
-\n'* && "$recipient" != *[[ "$recipient" =~ ^ssh-(ed25519|rsa)\ [A-Za-z0-9+/=]+([[:space:]].*)?$ ]] || {
-  echo "::error::Invalid public encryption recipient." >&2
-  exit 1
-}
-printf 'key=%s\n' "$recipient" >> "$GITHUB_OUTPUT"
-\r'* ]] || {
+[[ "$recipient" != *$'\n'* && "$recipient" != *$'\r'* ]] || {
   echo "::error::Invalid multiline recipient for GitHub step output." >&2
   exit 1
 }
