@@ -8,6 +8,7 @@ on:
       - '.github/workflows/deploy-production.yml'
       - '.github/workflows/deploy-postgres.yml'
       - 'script/fetch-infra-recipient.sh'
+      - 'script/test-fetch-infra-recipient.sh'
       - '.github/workflows/validate-deploy.yml'
       - '.github/workflows/full-ci.yml'
       - 'Gemfile'
@@ -88,6 +89,10 @@ jobs:
 
       - name: Check encryption recipient script syntax
         run: bash -n script/fetch-infra-recipient.sh
+
+      - name: Test recipient retry and public-key output safety
+        shell: bash
+        run: bash script/test-fetch-infra-recipient.sh
 
       - name: Validate production runtime configuration
         shell: bash
