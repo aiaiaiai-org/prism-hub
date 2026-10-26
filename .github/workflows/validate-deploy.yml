@@ -6,6 +6,8 @@ on:
   pull_request:
     paths:
       - '.github/workflows/deploy-production.yml'
+      - '.github/workflows/deploy-postgres.yml'
+      - 'script/fetch-infra-recipient.sh'
       - '.github/workflows/validate-deploy.yml'
       - '.github/workflows/full-ci.yml'
       - 'Gemfile'
@@ -42,6 +44,8 @@ jobs:
           ruby <<'RUBY'
           deploy = File.read('.github/workflows/deploy-production.yml')
           validate = File.read('.github/workflows/validate-deploy.yml')
+          postgres = File.read('.github/workflows/deploy-postgres.yml')
+          recipient = File.read('script/fetch-infra-recipient.sh')
 
           required = [
             'workflow_dispatch:',
@@ -65,10 +69,25 @@ jobs:
           abort 'deploy workflow must not disable SSH host verification' if deploy.include?('StrictHostKeyChecking=no')
           abort 'validate workflow must not encode obsolete SSH deployment assumptions' if validate.include?('secrets.' + 'SSH_')
 
+          {'prism-hub' => deploy, 'prism-postgres' => postgres}.each do |workload, workflow|
+            abort "Static recipient variable still used for #{workload}" if workflow.include?('vars.INFRA_AGE_RECIPIENT')
+            abort "Missing recipient request for #{workload}" unless workflow.include?('bash script/fetch-infra-recipient.sh ' + workload)
+            abort "Missing recipient output for #{workload}" unless workflow.include?('steps.recipient.outputs.key')
+            abort "Missing restricted INFRA_DEPLOY_TOKEN for #{workload}" unless workflow.include?('secrets.INFRA_DEPLOY_TOKEN')
+            abort "Deployment must remain manual: #{workload}" unless workflow.include?('workflow_dispatch:')
+            abort "Secret-containing workflow must not deploy on push: #{workload}" if workflow.match?(/^\s+push:\s*$/)
+          end
+          abort 'Recipient script must use correlated infra workflow' unless recipient.include?('issue-workload-recipient.yml') && recipient.include?('recipient-')
+          abort 'Recipient script must not request private SSH material' if recipient.include?('SSH_PRIVATE_KEY')
+          abort 'Recipient script must not forward GHCR credentials' if recipient.include?('GHCR_PULL_TOKEN')
+
           abort 'deploy workflow must delegate target resolution to infra' unless deploy.include?('target, network, secrets and activation: resolved by `aiaiaiai-org/infra`')
           # prism-hub is a container workload: infra deploys an image, and the caller names no ref.
           abort 'deploy workflow must dispatch an image, not a ref' if deploy.include?('"ref": os.environ')
           RUBY
+
+      - name: Check encryption recipient script syntax
+        run: bash -n script/fetch-infra-recipient.sh
 
       - name: Validate production runtime configuration
         shell: bash

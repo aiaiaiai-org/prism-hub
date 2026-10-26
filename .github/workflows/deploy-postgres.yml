@@ -17,14 +17,28 @@ concurrency:
 jobs:
   dispatch:
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     environment:
       name: production
     env:
       INFRA_DEPLOY_TOKEN: ${{ secrets.INFRA_DEPLOY_TOKEN }}
-      INFRA_AGE_RECIPIENT: ${{ vars.INFRA_AGE_RECIPIENT }}
       PRISM_POSTGRES_PASSWORD: ${{ secrets.PRISM_POSTGRES_PASSWORD }}
     steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Fetch infra-owned encryption recipient
+        id: recipient
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.INFRA_DEPLOY_TOKEN }}
+        run: bash script/fetch-infra-recipient.sh prism-postgres
+
       - name: Dispatch encrypted PostgreSQL credential
+        env:
+          INFRA_AGE_RECIPIENT: ${{ steps.recipient.outputs.key }}
         shell: bash
         run: |
           set -Eeuo pipefail
