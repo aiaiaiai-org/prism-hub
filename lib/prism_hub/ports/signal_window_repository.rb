@@ -17,8 +17,9 @@ module PrismHub
         raise NotImplementedError
       end
 
-      # The newest `limit` items published at or after `since`, oldest first.
-      def since(time:, limit:)
+      # The newest `limit` items published at or after `time`, oldest first.
+      # `source_id` scopes a query to one collector; nil retains legacy global queries.
+      def since(time:, limit:, source_id: nil)
         raise NotImplementedError
       end
 
