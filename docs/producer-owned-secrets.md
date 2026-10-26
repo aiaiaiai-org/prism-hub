@@ -52,4 +52,30 @@ Use a labelled synthetic delivery to the intended test chat to verify Porter,
 bot authentication and the Telegram acknowledgement. No live delivery is
 established by a successful build alone. Deployment remains a separate action.
 
+## Secret rotation and runtime activation
+
+GitHub Environment secrets are deployment inputs, not a live secret store.
+The producer encrypts them, infra assembles the workload environment on the
+VPS, and the container receives them at creation. Editing a GitHub secret or
+restarting an existing container does not inject the new value.
+
+After rotating `HUA_DELIVERY_SECRET`, set the same value as Hub's
+`PRISM_BOT_DELIVERY_SECRET` and redeploy both workloads using their producer
+workflows. Do not copy values into source, issue comments or shell output.
+During the interval when only one workload has been updated, requests can be
+rejected with 401/403. A rollback must restore a matching credential pair;
+rolling back only an image does not restore a previous secret.
+
+For the current rollout, the Hub image pins Signal to the merged #16 commit
+`4939796b3768419ee71f2bcf36d909e7c2739cf9`. The image build compiles this exact
+revision with `--locked`; a merge in Signal alone never updates the Hub binary.
+Porter remains pinned independently and is still invoked before HTTP delivery.
+
+After explicit deployment authorization, verify the reviewed edge route,
+activate the bot with its new secret, then activate the matching Hub release.
+Check both infra workload results, delivery-worker health, and one labelled
+synthetic message to the intended test recipient. Confirm a Telegram provider
+receipt separately from the recipient seeing the message. Do not replay or
+manufacture live threat events as a smoke test.
+
 <!-- © 2026 aiaiaiai · aiaiaiai.org -->

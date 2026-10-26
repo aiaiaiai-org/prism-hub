@@ -5,7 +5,7 @@
 # The signal binaries the hub runs as subprocesses: the collector reads channels, the runtime reads
 # and fuses. Pinned to a commit, so a rebuild of this commit runs the same reader.
 FROM rust:1.94-slim-bookworm AS signal
-ARG PRISM_SIGNAL_REV=4ef6b9ff09f1cb192fa9b4c47d7fd3e9d20a8ac0
+ARG PRISM_SIGNAL_REV=4939796b3768419ee71f2bcf36d909e7c2739cf9
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends git ca-certificates \
     && rm -rf /var/lib/apt/lists/*
