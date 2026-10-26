@@ -118,6 +118,29 @@ class IngestSignalsTest < Minitest::Test
     assert_equal 1, PrismHub::Adapters::ActiveRecordRecords::SignalEvidence.count
   end
 
+  def test_all_four_sources_survive_when_one_channel_exceeds_the_global_limit
+    channels = %w[vanek_nikolaev kpszsu war_monitor monitorwarr]
+    sources = channels.map { |channel| PrismHub::Domain::SignalSource.new(kind: "telegram", channel: channel) }
+    noisy = (1..501).map { |number| item(number, "busy", at: NOW - 60) }
+    quiet = channels.drop(1).each_with_index.map do |channel, number|
+      item(number + 1, "quiet", at: NOW - 3600).merge(
+        "source_id" => "telegram.channel:#{channel}",
+        "external_id" => "#{channel}/#{number + 1}"
+      )
+    end
+    @window.store(evidence: noisy + quiet)
+    @ingest = build_ingest(sources: sources)
+
+    @ingest.call(now: NOW)
+
+    evidence_ids = @gateway.windows.last
+    assert_equal 128, evidence_ids.length
+    assert_equal 125, evidence_ids.count { |id| id.start_with?("vanek_nikolaev/") }
+    channels.drop(1).each do |channel|
+      assert_equal 1, evidence_ids.count { |id| id.start_with?("#{channel}/") }
+    end
+  end
+
   def test_the_ledger_is_pruned_after_its_retention
     @ledger.record(assessment_id: "old", workspace_id: "personal-a", hazard_class: "drone", kind: "alert", event_seq: 1, at: NOW - 2 * 86_400)
 
@@ -128,7 +151,7 @@ class IngestSignalsTest < Minitest::Test
 
   private
 
-  def build_ingest
+  def build_ingest(sources: [SOURCE])
     fan_out = PrismHub::UseCases::FanOutSignalEvents.new(
       subscription_repository: @subscriptions,
       ledger: @ledger,
@@ -137,7 +160,7 @@ class IngestSignalsTest < Minitest::Test
       logger: @logger
     )
     PrismHub::UseCases::IngestSignals.new(
-      sources: [SOURCE], gateway: @gateway, window_repository: @window,
+      sources: sources, gateway: @gateway, window_repository: @window,
       threat_registry: PrismHub::Adapters::ActiveRecordSignalThreatRegistry.new, ledger: @ledger,
       fan_out: fan_out, logger: @logger
     )
