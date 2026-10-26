@@ -10,17 +10,22 @@ In the **aiaiaiai-org/prism-hub** GitHub `production` Environment, store:
 - `PRISM_HUB_SECRET_KEY_BASE` (Secret): Rails secret key.
 - `PRISM_BOT_DELIVERY_SECRET` (Secret): exactly the `HUA_DELIVERY_SECRET` stored
   in `0x0sky/h-ua-bot`'s production Environment. Never put either value in logs.
-- `INFRA_DEPLOY_TOKEN` (Secret): minimum GitHub permission needed to dispatch
-  production deployment via `aiaiaiai-org/infra`.
-- `INFRA_AGE_RECIPIENT` (Variable): public SSH encryption recipient of
-  infra's `edge-prod-2` Environment, obtained from infra's **Show workload
-  encryption recipient** manual workflow.
+- `INFRA_DEPLOY_TOKEN` (Secret): a fine-grained token with access to the
+  private `aiaiaiai-org/infra` repository (Contents: write to dispatch;
+  Actions: read to retrieve its public recipient artifact).
 
-The manual **Deploy Prism PostgreSQL** workflow encrypts only the database
-password and dispatches the pinned PostgreSQL image from infra's reviewed
-contract. The manual **Deploy production** workflow encrypts the database
-password, Rails secret, bot delivery secret and an ephemeral GHCR pull token, then dispatches the
-published Prism Hub image. Neither workflow gives the product repo SSH access.
+Both manual workflows request the target Environment's SSH **public** encryption
+recipient from infra's `Issue workload encryption recipient` workflow.
+The per-request artifact contains only `recipient.pub`, is correlated by the
+GitHub Actions run ID, and expires after one day. Neither a persistent
+`INFRA_AGE_RECIPIENT` Variable nor an infra SSH private key belongs in this repo.
+
+**Deploy Prism PostgreSQL** encrypts only the database password and dispatches
+the image pinned by infra's reviewed contract. **Deploy production** encrypts
+the database password, Rails secret, bot delivery secret and the ephemeral
+GitHub registry pull token, then dispatches the published Hub image. Both
+fail closed if infra access, recipient issuance, artifact validation or
+encryption fails. Neither workflow gives the product repo SSH access.
 Both only request a deployment; check infra's own workflow for success.
 
 Do not run the database workflow as part of routine Hub releases. Do not

@@ -23,10 +23,15 @@ jobs:
   dispatch:
     name: Dispatch production deployment
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     environment: production
 
     steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
       - name: Resolve the release image
         id: release
         shell: bash
@@ -65,12 +70,19 @@ jobs:
           echo "sha=$sha" >>"$GITHUB_OUTPUT"
           echo "image=$image" >>"$GITHUB_OUTPUT"
 
+      - name: Fetch infra-owned encryption recipient
+        id: recipient
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.INFRA_DEPLOY_TOKEN }}
+        run: bash script/fetch-infra-recipient.sh prism-hub
+
       - name: Encrypt Prism Hub credentials for its target Environment
         env:
           PRISM_POSTGRES_PASSWORD: ${{ secrets.PRISM_POSTGRES_PASSWORD }}
           PRISM_HUB_SECRET_KEY_BASE: ${{ secrets.PRISM_HUB_SECRET_KEY_BASE }}
           PRISM_BOT_DELIVERY_SECRET: ${{ secrets.PRISM_BOT_DELIVERY_SECRET }}
-          INFRA_AGE_RECIPIENT: ${{ vars.INFRA_AGE_RECIPIENT }}
+          INFRA_AGE_RECIPIENT: ${{ steps.recipient.outputs.key }}
           REGISTRY_TOKEN: ${{ github.token }}
         shell: bash
         run: |
