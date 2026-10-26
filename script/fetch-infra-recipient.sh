@@ -33,6 +33,14 @@ if ! gh api --silent "repos/$infra_repo/actions/workflows/issue-workload-recipie
   exit 1
 fi
 
+# Rerunning a GitHub job preserves GITHUB_RUN_ID. Ignore prior issuance runs.
+recipient_title="Recipient $workload / $GITHUB_RUN_ID"
+list_recipient_runs() {
+  gh api "repos/$infra_repo/actions/workflows/issue-workload-recipient.yml/runs?event=repository_dispatch&per_page=100"
+}
+seen_run_ids="$(list_recipient_runs | jq -c --arg title "$recipient_title" \
+  '[.workflow_runs[] | select(.display_title == $title and .event == "repository_dispatch" and .head_branch == "master") | .id]')"
+
 jq -n --arg workload "$workload" --arg request_id "$GITHUB_RUN_ID" \
   '{event_type:"issue-workload-recipient",client_payload:{workload:$workload,request_id:$request_id}}' \
   > "$recipient_dir/request.json"
@@ -43,9 +51,9 @@ fi
 
 recipient_run=""
 for attempt in $(seq 1 180); do
-  runs="$(gh api "repos/$infra_repo/actions/workflows/issue-workload-recipient.yml/runs?event=repository_dispatch&per_page=50")"
-  recipient_run="$(jq -c --arg title "Recipient $workload / $GITHUB_RUN_ID" \
-    '[.workflow_runs[] | select(.display_title == $title and .event == "repository_dispatch" and .head_branch == "master")][0] // empty' <<< "$runs")"
+  runs="$(list_recipient_runs)"
+  recipient_run="$(jq -c --arg title "$recipient_title" --argjson seen "$seen_run_ids" \
+    '[.workflow_runs[] | select(.display_title == $title and .event == "repository_dispatch" and .head_branch == "master" and (.id as $id | $seen | index($id) | not))][0] // empty' <<< "$runs")"
   if [[ -n "$recipient_run" && "$(jq -r '.status' <<< "$recipient_run")" == completed ]]; then
     if [[ "$(jq -r '.conclusion' <<< "$recipient_run")" != success ]]; then
       echo "::error::Infra recipient issuance failed: $(jq -r '.html_url' <<< "$recipient_run")" >&2
@@ -70,6 +78,21 @@ test -s "$public_key"
 [[ "$(wc -l < "$public_key")" -eq 1 ]] || { echo "::error::Invalid public key line count." >&2; exit 1; }
 ssh-keygen -lf "$public_key" >/dev/null
 recipient="$(cat "$public_key")"
+# A first line plus an unterminated second line may pass wc -l.
+[[ "$recipient" != *[[ "$recipient" =~ ^ssh-(ed25519|rsa)\ [A-Za-z0-9+/=]+([[:space:]].*)?$ ]] || {
+  echo "::error::Invalid public encryption recipient." >&2
+  exit 1
+}
+printf 'key=%s\n' "$recipient" >> "$GITHUB_OUTPUT"
+\n'* && "$recipient" != *[[ "$recipient" =~ ^ssh-(ed25519|rsa)\ [A-Za-z0-9+/=]+([[:space:]].*)?$ ]] || {
+  echo "::error::Invalid public encryption recipient." >&2
+  exit 1
+}
+printf 'key=%s\n' "$recipient" >> "$GITHUB_OUTPUT"
+\r'* ]] || {
+  echo "::error::Invalid multiline recipient for GitHub step output." >&2
+  exit 1
+}
 [[ "$recipient" =~ ^ssh-(ed25519|rsa)\ [A-Za-z0-9+/=]+([[:space:]].*)?$ ]] || {
   echo "::error::Invalid public encryption recipient." >&2
   exit 1
