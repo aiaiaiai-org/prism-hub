@@ -16,7 +16,7 @@ Every interval (default 60 s):
 
 1. Each source is read with `prism-signal-collect telegram <channel> poll --after <cursor>`. The evidence is stored, and the cursor moves to the newest post seen. It never moves back. A source that cannot be read is logged and skipped; the pass continues.
 2. Evidence older than the window (default 4 h) is dropped.
-3. The window, at most 500 items, is sent to `prism-signal-runtime`: `normalize`, then `assess` with `fusion.v1`. The runtime is stateless, so the window is recomputed every pass and the same posts give the same events.
+3. The ingestion window is capped at 500 items **shared fairly across configured sources**, with a maximum of `floor(500 / source_count)` newest reports per channel. The reports are sorted chronologically before being sent to `prism-signal-runtime`: `normalize`, then `assess` with `fusion.v1`. One high-volume channel cannot evict all evidence from quieter channels. The cap may still discard older posts from a very busy channel; window truncation never implies an official all-clear. The runtime is stateless, so the same sampled window gives the same assessment.
 4. The events are fanned out (below), and ledger entries older than 24 h are deleted.
 
 A pass that fails is logged and the loop goes on. A scheduler that dies leaves people without alerts and without any sign of it.
@@ -115,7 +115,7 @@ Queued in the outbox as a `prism-hub.delivery-request.v1` envelope with artifact
 }
 ```
 
-`event` is `alert` or `retraction`. `event_at` and `event_url` are the statement that caused this message: the post that reported the threat, or the one that called it off. `sources` holds the newest three reports. Porter (`signal.alert`, `prism-hub.signal-alert.v1`) renders it in Ukrainian. `still_active` is filled only for a retraction. The idempotency key is derived from the assessment, the workspace, and the kind, so a retry can never queue a second message.
+`event` is `alert` or `retraction`. `event_at` and `event_url` are the statement that caused this message: the post that reported the threat, or the one that called it off. `sources` contains at most eight **different channel identifiers**, each represented by its newest source report. When `active_sources` is available, active channels are selected first; if absent (older runtime), citations fall back to one latest report per channel. A frequent poster cannot suppress the other configured sources. The full historical `source_reports` array is preserved separately in the threat registry. Porter (`signal.alert`, `prism-hub.signal-alert.v1`) renders it in Ukrainian. `still_active` is filled only for a retraction. The idempotency key is derived from the assessment, the workspace, and the kind, so a retry can never queue a second message.
 
 ## Configuration
 
