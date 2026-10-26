@@ -71,6 +71,25 @@ class ActiveRecordSignalRepositoriesTest < Minitest::Test
     assert_equal %w[x3 x4 x5], @window.since(time: T0 + 3 * 60, limit: 10).map { |i| i["text"] }
   end
 
+  def test_scoped_window_reads_each_source_without_cross_channel_eviction
+    @window.store(evidence: [
+      item(1, T0, "a1"),
+      item(2, T0 + 60, "a2"),
+      item(3, T0 + 120, "a3"),
+      item(1, T0 + 30, "b1").merge(
+        "source_id" => "telegram.channel:kpszsu",
+        "external_id" => "kpszsu/1"
+      )
+    ])
+
+    assert_equal %w[a2 a3],
+      @window.since(time: T0, limit: 2, source_id: SOURCE).map { |item| item.fetch("text") }
+    assert_equal ["b1"],
+      @window.since(time: T0, limit: 2, source_id: "telegram.channel:kpszsu").map { |item| item.fetch("text") }
+    assert_equal %w[a3],
+      @window.since(time: T0 + 100, limit: 2, source_id: SOURCE).map { |item| item.fetch("text") }
+  end
+
   def test_prune_drops_only_what_left_the_window
     (1..3).each { |n| @window.store(evidence: [item(n, T0 + n * 60, "x#{n}")]) }
 
