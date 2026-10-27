@@ -87,8 +87,8 @@ During the interval when only one workload has been updated, requests can be
 rejected with 401/403. A rollback must restore a matching credential pair;
 rolling back only an image does not restore a previous secret.
 
-For the current rollout, the Hub image pins Signal to the merged #16 commit
-`4939796b3768419ee71f2bcf36d909e7c2739cf9`. The image build compiles this exact
+For the current rollout, the Hub image pins Signal to the merged #24 commit
+`015008fd741ba12067b51f354f97286d2a8dbfda`. The image build compiles this exact
 revision with `--locked`; a merge in Signal alone never updates the Hub binary.
 Porter remains pinned independently and is still invoked before HTTP delivery.
 
