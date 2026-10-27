@@ -109,7 +109,7 @@ jobs:
           abort 'Handshake must be manually triggered' unless workflow.include?('workflow_dispatch:')
           abort 'Handshake may not send Telegram messages' unless script.include?("--data-binary '{}'") &&
             script.include?('invalid_request') && !script.include?('--data-binary "@')
-          abort 'Handshake must be a safe isolated boundary' if workflow.match?(/^\\s+push:\\s*$/)
+          abort 'Handshake must be a safe isolated boundary' if workflow.match?(/^\s+push:\s*$/)
           RUBY
           bash -n script/check-hua-delivery-handshake.sh
           bash -n script/test-hua-delivery-handshake.sh
