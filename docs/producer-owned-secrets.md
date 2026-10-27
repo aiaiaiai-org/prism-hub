@@ -57,6 +57,22 @@ Use a labelled synthetic delivery to the intended test chat to verify Porter,
 bot authentication and the Telegram acknowledgement. No live delivery is
 established by a successful build alone. Deployment remains a separate action.
 
+## Production delivery verification
+
+Run the manual [Verify h-ua delivery connection](../.github/workflows/verify-hua-delivery.yml)
+workflow from `master` in this repository. It uses this repository's
+`production` Environment secret `PRISM_BOT_DELIVERY_SECRET` and never sends
+a Telegram message: it verifies public Hub and bot health, then checks
+authentication using a malformed empty delivery request and requires
+HTTP 400 `invalid_request`. An HTTP 401 or a different payload fails closed.
+
+The infra Environment contains only SSH/infra credentials. Its independent
+health check cannot verify producer credentials and must not be mistaken for a
+successful delivery test. A green Hub check also does not prove alert
+subscriptions, signal scheduler, Porter, outbox, Telegram receipt, or actual
+recipient delivery; complete the labelled synthetic-message acceptance test
+separately.
+
 ## Secret rotation and runtime activation
 
 GitHub Environment secrets are deployment inputs, not a live secret store.
