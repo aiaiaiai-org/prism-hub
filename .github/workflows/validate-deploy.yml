@@ -9,6 +9,9 @@ on:
       - '.github/workflows/deploy-postgres.yml'
       - 'script/fetch-infra-recipient.sh'
       - 'script/test-fetch-infra-recipient.sh'
+      - '.github/workflows/verify-hua-delivery.yml'
+      - 'script/check-hua-delivery-handshake.sh'
+      - 'script/test-hua-delivery-handshake.sh'
       - '.github/workflows/validate-deploy.yml'
       - '.github/workflows/full-ci.yml'
       - 'Gemfile'
@@ -93,6 +96,24 @@ jobs:
       - name: Test recipient retry and public-key output safety
         shell: bash
         run: bash script/test-fetch-infra-recipient.sh
+
+      - name: Validate producer-owned h-ua handshake
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ruby <<'RUBY'
+          workflow = File.read('.github/workflows/verify-hua-delivery.yml')
+          script = File.read('script/check-hua-delivery-handshake.sh')
+          abort 'Production environment secret missing' unless workflow.include?('environment: production') &&
+            workflow.include?('secrets.PRISM_BOT_DELIVERY_SECRET')
+          abort 'Handshake must be manually triggered' unless workflow.include?('workflow_dispatch:')
+          abort 'Handshake may not send Telegram messages' unless script.include?("--data-binary '{}'") &&
+            script.include?('invalid_request') && !script.include?('--data-binary "@')
+          abort 'Handshake must be a safe isolated boundary' if workflow.match?(/^\\s+push:\\s*$/)
+          RUBY
+          bash -n script/check-hua-delivery-handshake.sh
+          bash -n script/test-hua-delivery-handshake.sh
+          bash script/test-hua-delivery-handshake.sh
 
       - name: Validate production runtime configuration
         shell: bash
