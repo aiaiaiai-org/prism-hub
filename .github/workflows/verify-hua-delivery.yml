@@ -1,0 +1,50 @@
+# © 2026 aiaiaiai · aiaiaiai.org
+#
+# A read-only manual production check using the Hub-owned delivery secret.
+name: Verify h-ua delivery connection
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prism-hua-delivery-verification
+  cancel-in-progress: false
+
+jobs:
+  handshake:
+    name: Verify production Hub ↔ h-ua-bot transport
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: production
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Verify deployed delivery credential without sending a message
+        shell: bash
+        env:
+          PRISM_BOT_DELIVERY_SECRET: ${{ secrets.PRISM_BOT_DELIVERY_SECRET }}
+        run: |
+          set -Eeuo pipefail
+          if [[ "$GITHUB_REF" != refs/heads/master ]]; then
+            echo "::error::Run production verification from master" >&2
+            exit 64
+          fi
+          bash script/check-hua-delivery-handshake.sh
+
+      - name: Record verification boundary
+        if: success()
+        shell: bash
+        run: |
+          {
+            echo "### h-ua-bot delivery transport"
+            echo ""
+            echo "- HTTP health of Prism Hub and h-ua-bot: verified"
+            echo "- Shared production delivery credential and bad-request rejection: verified"
+            echo "- Telegram send: NOT attempted"
+            echo "- Hub subscription state, scheduler, fan-out, Porter, real Telegram acknowledgement: NOT verified"
+          } >> "$GITHUB_STEP_SUMMARY"
