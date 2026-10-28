@@ -149,7 +149,7 @@ A channel name is checked against Telegram's rules for a public username before 
 
 ## Limits
 
-- The input reports are not official air-raid warnings. The collector and runtime cannot make a report true; Porter presents threat and update time without displaying provider names, channel IDs or post URLs, while retaining a clear unofficial-service warning. Neither `retracted` nor `expired` represents an **official air-raid all-clear**. `likelihood` and channel count are not calibrated risk or proof of independent reporting.
+- The input reports are not official air-raid warnings. The collector and runtime cannot make a report true; Porter presents threat and update time without displaying provider names, channel IDs or post URLs; the bot says once, when a person starts, that the service is unofficial, and no message repeats it. No message says a threat is over or a place is safe. Neither `retracted` nor `expired` represents an **official air-raid all-clear**. `likelihood` and channel count are not calibrated risk or proof of independent reporting.
 - A stale or unreadable source is logged and not announced. Silence from the hub is not safety.
 - An episode that outlives the window is re-identified once its first post is dropped, so a person may be told again after the cool-down. That is a true statement about an ongoing threat.
 - Alerts are only as good as the subscription's cell: about 3 km, and the cover already adds one ring of margin.
