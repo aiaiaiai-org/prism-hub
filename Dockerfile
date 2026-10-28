@@ -15,7 +15,7 @@ RUN cargo install --locked --root /out \
 
 # Porter renders what the hub queues. It is a plain Ruby program with no gems.
 FROM ruby:4.0.6-slim AS porter
-ARG PRISM_PORTER_REV=41e3dc7f471b7a302e9b0d9c2fcc292cf0873ff5
+ARG PRISM_PORTER_REV=a09e4d9c6a5551ef6c6070fd04a96c553f21c2e8
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends git ca-certificates \
     && rm -rf /var/lib/apt/lists/*

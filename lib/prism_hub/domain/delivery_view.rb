@@ -4,8 +4,8 @@
 module PrismHub
   module Domain
     # How a delivery keeps a message current instead of adding one: replace a message sent
-    # earlier, remove the ones it supersedes, arrive without a sound. The bot is a view and acts
-    # on it; the hub decides it.
+    # earlier, remove the ones it supersedes, arrive without a sound, be pinned above the chat
+    # when sent anew. The bot is a view and acts on it; the hub decides it.
     #
     # `slot` and `revision` name what the delivery is for (`board` or `status`, and which
     # version), so the message id the bot answers with can be recorded against it.
@@ -13,7 +13,7 @@ module PrismHub
       SLOTS = %w[board status].freeze
       MAX_DELETES = 10
 
-      attr_reader :edit_message_id, :delete_message_ids, :silent, :slot, :revision
+      attr_reader :edit_message_id, :delete_message_ids, :silent, :pin, :slot, :revision
 
       def self.from_h(value)
         return nil if value.nil?
@@ -23,6 +23,7 @@ module PrismHub
           edit_message_id: value["edit_message_id"],
           delete_message_ids: value.fetch("delete_message_ids", []),
           silent: value.fetch("silent", false),
+          pin: value.fetch("pin", false),
           slot: value["slot"],
           revision: value["revision"]
         )
@@ -32,10 +33,11 @@ module PrismHub
         InputError.new("hub.delivery_request.view.invalid", message)
       end
 
-      def initialize(edit_message_id: nil, delete_message_ids: [], silent: false, slot: nil, revision: nil)
+      def initialize(edit_message_id: nil, delete_message_ids: [], silent: false, pin: false, slot: nil, revision: nil)
         @edit_message_id = optional_message_id(edit_message_id)
         @delete_message_ids = message_ids(delete_message_ids)
-        @silent = boolean(silent)
+        @silent = boolean(silent, "silent")
+        @pin = boolean(pin, "pin")
         @slot = slot_value(slot)
         @revision = revision_value(revision)
         freeze
@@ -46,6 +48,7 @@ module PrismHub
           "edit_message_id" => edit_message_id,
           "delete_message_ids" => delete_message_ids,
           "silent" => silent,
+          "pin" => pin,
           "slot" => slot,
           "revision" => revision
         }.freeze
@@ -57,6 +60,7 @@ module PrismHub
         body["edit_message_id"] = edit_message_id if edit_message_id
         body["delete_message_ids"] = delete_message_ids unless delete_message_ids.empty?
         body["silent"] = true if silent
+        body["pin"] = true if pin
         body
       end
 
@@ -76,10 +80,10 @@ module PrismHub
         raise self.class.invalid("delete_message_ids must be at most #{MAX_DELETES} positive integers")
       end
 
-      def boolean(value)
+      def boolean(value, name)
         return value if [true, false].include?(value)
 
-        raise self.class.invalid("silent must be true or false")
+        raise self.class.invalid("#{name} must be true or false")
       end
 
       def slot_value(value)

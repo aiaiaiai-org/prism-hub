@@ -58,7 +58,7 @@ module PrismHub
           idempotency_key: key,
           view: Domain::DeliveryView.new(
             edit_message_id: op.edit_message_id, delete_message_ids: op.delete_message_ids, silent: op.silent,
-            slot: op.slot, revision: op.revision
+            pin: op.pin, slot: op.slot, revision: op.revision
           )
         )
       end

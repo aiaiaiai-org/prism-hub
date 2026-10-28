@@ -119,14 +119,15 @@ Queued in the outbox as a `prism-hub.delivery-request.v1` envelope with artifact
 
 ## Live board and status
 
-With `PRISM_SIGNAL_DELIVERY=board` (the default) a person gets two messages instead of one per report:
+With `PRISM_SIGNAL_DELIVERY=board` (the default) a person keeps a board, always, and a status while there is danger:
 
-- **The board** lists every threat that concerns them: kind, count, where it is and where it heads, when it was last seen. The source travels in the payload for audit; Porter does not show it. It is posted once, silently, and then **edited in place** as tracks move, merge, go quiet or end. Threats stay on it until a source calls them off (`neutralized`, `cleared`) or they go `stale`; a quiet track stays, marked as quiet.
-- **The status** is one line on how close the danger is: `here` (a track's cells cover the person's cell), `region` (only its oblast, and only with `include_nearby`), or `quiet`. It is **sent anew with a sound only when the danger grows** (a higher level, or a new kind at the same level); the old status is deleted so the chat never holds two. Otherwise it is edited silently.
-- When nothing concerns the person any more, the status becomes a quiet one (sent silently; never phrased as an all-clear) and the board closes with how many threats ended. The next attack starts a new board.
-- Only that quiet status may ask whether the person is still where they said: when their cell is more than 3 days old, at most once a day.
+- **The board** is posted once, silently, **pinned**, and from then on only **edited in place**. Its headline is the level: `here` (a track's cells cover the person's cell) or `region` (only its oblast, and only with `include_nearby`). It lists every threat that concerns them: kind, count, where it is and where it heads, when it was last seen. The source travels in the payload for audit; Porter does not show it. Threats stay on it until a source calls them off (`neutralized`, `cleared`) or they go `stale`; a quiet track stays, marked as quiet.
+- **The status** is one line on what is coming. It is **sent anew with a sound only when the danger grows** (a higher level, or a new kind at the same level); the old status is deleted so the chat never holds two. Otherwise it is edited silently.
+- When nothing concerns the person any more, the board says there are no new reports and sums up the last attack, and the status is deleted with that edit. Nothing is phrased as an all-clear. The next attack starts a new summary on the same board.
+- A quiet board asks whether the person is still where they said when their cell is more than 3 days old.
+- A person with a subscription gets a quiet board before any attack, so the board is always there.
 
-What to say and when is `Domain::SignalBoardPlan`; Porter renders `signal.board` (`prism-hub.signal-board.v1`) and `signal.status` (`prism-hub.signal-status.v1`). `RefreshSignalBoards` queues each change with a delivery `view` (edit, delete, silent) and keeps the state in `signal_boards`, one row per workspace, holding message ids, digests and the shown track ids, never a position. The delivery worker records the message id the bot returns; a receipt for an older revision, or for a board that has since closed, is ignored. Clearing a subscription deletes the row.
+What to say and when is `Domain::SignalBoardPlan`; Porter renders `signal.board` (`prism-hub.signal-board.v1`) and `signal.status` (`prism-hub.signal-status.v1`). `RefreshSignalBoards` queues each change with a delivery `view` (edit, delete, silent, pin) and keeps the state in `signal_boards`, one row per workspace, holding message ids, digests and the shown track ids, never a position. The delivery worker records the message id the bot returns; a receipt for an older revision is ignored. Clearing a subscription deletes the row.
 
 ## Configuration
 
