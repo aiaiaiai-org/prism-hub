@@ -38,18 +38,24 @@ class SignalBoardPlanTest < Minitest::Test
     state
   end
 
-  def test_nothing_concerns_a_quiet_person_and_nothing_is_sent
+  def test_a_quiet_person_gets_a_quiet_pinned_board_once_and_then_nothing
     result = plan([track("a", here: false)])
-    assert_empty result.ops
+    board = result.ops.sole
+    assert_equal ["board", nil, true, true], [board.slot, board.edit_message_id, board.silent, board.pin]
+    assert_equal({"level" => "quiet", "since" => nil, "entries" => [], "ended" => 0},
+      board.payload.slice("level", "since", "entries", "ended"))
     assert_equal "quiet", result.state.level
+
+    assert_empty plan([], state: receipt(result.state, board: 9), now: T0 + 60).ops, "a quiet board stays as it is"
   end
 
   def test_the_first_report_posts_a_quiet_board_and_a_status_that_rings
     result = plan([track("a"), track("b"), track("c", kind: "air.jet_drone")])
 
     board, status = result.ops
-    assert_equal ["board", nil, true], [board.slot, board.edit_message_id, board.silent]
-    assert_equal ["status", false, []], [status.slot, status.silent, status.delete_message_ids]
+    assert_equal ["board", nil, true, true], [board.slot, board.edit_message_id, board.silent, board.pin]
+    assert_equal ["status", false, [], false], [status.slot, status.silent, status.delete_message_ids, status.pin]
+    assert_equal "here", board.payload.fetch("level")
     entry = board.payload.fetch("entries").find { |item| item["kind"] == "air.attack_drone" }
     assert_equal({"level" => "here", "count" => 2, "place" => "Чернігів", "target" => "Київ", "source" => "@kpszsu"},
       entry.slice("level", "count", "place", "target", "source"))
@@ -85,40 +91,48 @@ class SignalBoardPlanTest < Minitest::Test
     assert_equal ["here", false, [2]], [status.payload.fetch("level"), status.silent, status.delete_message_ids]
 
     off = plan([track("r", here: false, region: true)], sub: subscription(include_nearby: false))
-    assert_empty off.ops, "the oblast is nearby, which the person can turn off"
+    assert_equal ["quiet"], off.ops.map { |op| op.payload.fetch("level") }, "the oblast is nearby, which can be off"
   end
 
-  def test_when_it_all_ends_the_board_closes_and_a_quiet_status_is_never_an_all_clear
+  def test_when_it_all_ends_the_board_stays_and_the_status_is_deleted_with_its_edit
     first = plan([track("a"), track("b")])
     state = receipt(first.state, board: 10, status: 11)
 
     ended = plan([track("a", status: "neutralized", here: false), track("b", status: "cleared", here: false)],
       state: state, now: T0 + 600)
 
-    board, status = ended.ops
-    assert_equal [10, 2], [board.edit_message_id, board.payload.fetch("ended")]
-    assert_empty board.payload.fetch("entries")
-    assert_equal ["quiet", true, [11]], [status.payload.fetch("level"), status.silent, status.delete_message_ids]
-    refute status.payload.key?("position_at"), "a fresh position is not mentioned"
-    assert_nil ended.state.board_message_id, "the next report starts a new board"
-    assert_equal 2, ended.state.board_floor_revision, "receipts for the closed board are ignored"
+    board = ended.ops.sole
+    assert_equal ["board", 10, [11], false], [board.slot, board.edit_message_id, board.delete_message_ids, board.pin]
+    assert_equal ["quiet", 2, []], [board.payload.fetch("level"), board.payload.fetch("ended"), board.payload.fetch("entries")]
+    assert_equal T0.iso8601.sub("01:00", "00:50"), board.payload.fetch("since"), "the last attack is summed up"
+    refute board.payload.key?("position_at"), "a fresh position is not mentioned"
+    assert_equal [10, nil], [ended.state.board_message_id, ended.state.status_message_id], "the board stays"
 
-    again = plan([track("c")], state: receipt(ended.state, status: 12), now: T0 + 1200)
-    assert_equal [["board", nil], ["status", nil]], again.ops.map { |op| [op.slot, op.edit_message_id] }
-    assert_equal [12], again.ops.last.delete_message_ids, "the quiet status gives way to the new one"
+    again = plan([track("c")], state: ended.state, now: T0 + 1200)
+    board, status = again.ops
+    assert_equal [10, "here", 0], [board.edit_message_id, board.payload.fetch("level"), board.payload.fetch("ended")]
+    assert_equal [nil, false, []], [status.edit_message_id, status.silent, status.delete_message_ids]
   end
 
-  def test_an_old_position_is_mentioned_only_in_the_quiet_status_and_at_most_daily
+  def test_a_status_to_delete_waits_for_a_board_edit_that_can_carry_it
+    first = plan([track("a")])
+    state = receipt(first.state, status: 11)
+    ended = plan([], state: state, now: T0 + 60)
+    assert_empty ended.ops, "the board is still on its way"
+    assert_equal 11, ended.state.status_message_id
+
+    later = plan([], state: receipt(ended.state, board: 10), now: T0 + 600)
+    assert_equal [11], later.ops.sole.delete_message_ids
+  end
+
+  def test_an_old_position_is_mentioned_only_on_a_quiet_board
     sub = subscription(updated_at: T0 - (4 * 86_400))
     first = plan([track("a")], sub: sub)
-    refute first.ops.last.payload.key?("position_at"), "never while the danger is on"
+    refute first.ops.first.payload.key?("position_at"), "never while the danger is on"
 
     quiet = plan([], state: receipt(first.state, board: 1, status: 2), now: T0 + 600, sub: sub)
-    assert_equal (T0 - (4 * 86_400)).iso8601, quiet.ops.last.payload.fetch("position_at")
-
-    again = plan([track("b")], state: receipt(quiet.state, status: 3), now: T0 + 1200, sub: sub)
-    later = plan([], state: receipt(again.state, board: 4, status: 5), now: T0 + 1800, sub: sub)
-    refute later.ops.last.payload.key?("position_at"), "once a day"
+    assert_equal (T0 - (4 * 86_400)).iso8601, quiet.ops.sole.payload.fetch("position_at")
+    assert_empty plan([], state: quiet.state, now: T0 + 1200, sub: sub).ops, "and said once, not every pass"
   end
 
   def test_a_message_on_its_way_is_not_sent_twice
@@ -127,7 +141,7 @@ class SignalBoardPlanTest < Minitest::Test
     assert_empty soon.ops, "no receipt yet, still in the outbox"
 
     lost = plan([track("a"), track("b")], state: first.state, now: T0 + 600)
-    assert_equal [["board", nil], ["status", nil]], lost.ops.map { |op| [op.slot, op.edit_message_id] }
+    assert_equal [["board", nil, true], ["status", nil, false]], lost.ops.map { |op| [op.slot, op.edit_message_id, op.pin] }
   end
 
   def test_quiet_tracks_stay_live_and_stale_ones_are_shown_apart_never_as_ended
@@ -145,7 +159,7 @@ class SignalBoardPlanTest < Minitest::Test
 
   def test_categories_filter_and_unknown_counts_are_not_numbers
     only_missiles = plan([track("a")], sub: subscription(categories: %w[missile]))
-    assert_empty only_missiles.ops
+    assert_equal ["quiet"], only_missiles.ops.map { |op| op.payload.fetch("level") }
 
     unknown = plan([track("a", count_unknown: true), track("b")])
     entry = unknown.ops.first.payload.fetch("entries").first
@@ -155,7 +169,7 @@ class SignalBoardPlanTest < Minitest::Test
   def test_the_rendering_contract_is_met_for_porter
     result = plan([track("a"), track("r", here: false, region: true, position: "Київська область", target: nil)])
     board = result.ops.first.payload
-    assert_equal %w[as_of ended entries quiet schema_version since], board.keys.sort
+    assert_equal %w[as_of ended entries level quiet schema_version since], board.keys.sort
     assert_equal %w[count kind last_seen_at level place quiet source target], board.fetch("entries").first.keys.sort
     assert_equal %w[here region], board.fetch("entries").map { |item| item["level"] }
   end

@@ -79,12 +79,14 @@ class DeliveryRequestTest < Minitest::Test
   end
 
   def test_a_view_survives_the_round_trip_and_a_request_without_one_is_unchanged
-    view = PrismHub::Domain::DeliveryView.new(edit_message_id: 9, delete_message_ids: [7], silent: true, slot: "status", revision: 2)
+    view = PrismHub::Domain::DeliveryView.new(edit_message_id: 9, delete_message_ids: [7], silent: true, pin: true,
+      slot: "status", revision: 2)
     request = build(view: view)
     restored = PrismHub::Domain::DeliveryRequest.from_h(JSON.parse(JSON.generate(request.to_h)))
 
     assert_equal request.to_h, restored.to_h
-    assert_equal 9, restored.view.edit_message_id
+    assert_equal [9, true], [restored.view.edit_message_id, restored.view.pin]
+    assert_equal false, PrismHub::Domain::DeliveryView.from_h({}).pin, "a view stored before pin existed"
     refute build.to_h.key?("view"), "a request without a view stores exactly as before"
     assert_nil PrismHub::Domain::DeliveryRequest.from_h(JSON.parse(JSON.generate(build.to_h))).view
   end
@@ -95,6 +97,7 @@ class DeliveryRequestTest < Minitest::Test
       {delete_message_ids: [-1]},
       {delete_message_ids: (1..11).to_a},
       {silent: "yes"},
+      {pin: "yes"},
       {slot: "banner", revision: 1},
       {slot: "board"},
       {revision: 1}

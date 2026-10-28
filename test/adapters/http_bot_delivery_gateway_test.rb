@@ -41,7 +41,8 @@ class HttpBotDeliveryGatewayTest < Minitest::Test
   def test_a_view_edits_deletes_and_silences_through_the_bot_contract
     transport = FakeTransport.new([response_for(77), response_for(78)])
     gateway = gateway_for(transport)
-    view = PrismHub::Domain::DeliveryView.new(edit_message_id: 77, delete_message_ids: [70, 71], silent: true, slot: "board", revision: 3)
+    view = PrismHub::Domain::DeliveryView.new(edit_message_id: 77, delete_message_ids: [70, 71], silent: true, pin: true,
+      slot: "board", revision: 3)
 
     results = gateway.deliver(intent: intent_for(["board"]), binding: binding_for, view: view)
     gateway.deliver(intent: intent_for(["plain"]), binding: binding_for)
@@ -50,6 +51,7 @@ class HttpBotDeliveryGatewayTest < Minitest::Test
     assert_equal 77, body.fetch("edit_message_id")
     assert_equal [70, 71], body.fetch("delete_message_ids")
     assert_equal true, body.fetch("silent")
+    assert_equal true, body.fetch("pin")
     refute body.key?("slot"), "the slot is the hub's, not the bot's"
     assert_equal 77, results.last.fetch("provider_message_id")
     plain = JSON.parse(transport.requests[1].fetch(:body))
