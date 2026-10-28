@@ -24,6 +24,11 @@ module PrismHub
         raise NotImplementedError
       end
 
+      # Every subscription, for the live boards.
+      def all
+        raise NotImplementedError
+      end
+
       def find_all(workspace_ids:)
         raise NotImplementedError
       end

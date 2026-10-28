@@ -46,6 +46,7 @@ module PrismHub
           # Which assessments someone was told about says where they were, so it goes with the
           # subscription: nothing about a person's position is kept once they ask to stop.
           ActiveRecordRecords::SignalAlertDelivery.where(workspace: workspace).delete_all
+          ActiveRecordRecords::SignalBoard.where(workspace: workspace).delete_all
         end
         nil
       end
@@ -57,6 +58,13 @@ module PrismHub
           .includes(:workspace)
           .where(cell: cells)
           .where("? = ANY(categories)", category)
+          .order(:created_at, :id)
+          .map { |record| to_domain(record) }
+      end
+
+      def all
+        ActiveRecordRecords::AlertSubscription
+          .includes(:workspace)
           .order(:created_at, :id)
           .map { |record| to_domain(record) }
       end

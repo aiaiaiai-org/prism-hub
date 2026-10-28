@@ -46,7 +46,8 @@ begin
   outbox_repository = PrismHub::Adapters::ActiveRecordDeliveryOutboxRepository.new
   processor = PrismHub::UseCases::ProcessDeliveryOutbox.new(
     outbox_repository: outbox_repository,
-    dispatch_delivery: dispatch_delivery
+    dispatch_delivery: dispatch_delivery,
+    view_receipts: PrismHub::Adapters::ActiveRecordSignalBoardRepository.new
   )
 
   loop do

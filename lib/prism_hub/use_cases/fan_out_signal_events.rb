@@ -30,7 +30,8 @@ module PrismHub
         @cooldown = positive(cooldown_seconds, "cool-down")
       end
 
-      def call(assessments:, events:, now:)
+      # `tracks` are for the live boards; this one-message-per-report fan-out does not read them.
+      def call(assessments:, events:, now:, tracks: [])
         summary = Summary.new(alerts: 0, retractions: 0, skipped: Hash.new(0))
         by_id = assessments.to_h { |assessment| [assessment.fetch("assessment_id"), assessment] }
         @bound = {}
