@@ -25,7 +25,7 @@ module PrismHub
             override: request.chunk_max_chars_limit
           )
         )
-        @delivery_gateway.deliver(intent: intent, binding: binding)
+        @delivery_gateway.deliver(intent: intent, binding: binding, view: request.view)
       end
 
       private

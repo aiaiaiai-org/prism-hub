@@ -73,6 +73,31 @@ class ProcessDeliveryOutboxTest < Minitest::Test
     assert_nil repository.failed
   end
 
+  def test_a_delivered_board_records_the_message_it_lives_in
+    view = PrismHub::Domain::DeliveryView.new(silent: true, slot: "board", revision: 4)
+    request = PrismHub::Domain::DeliveryRequest.new(
+      artifact: @request.artifact, routes: @request.routes, workspace: "personal", channel: "digest",
+      idempotency_key: @request.idempotency_key, view: view
+    )
+    entry = PrismHub::Domain::DeliveryOutboxEntry.new(
+      id: "entry-2", workspace: "personal", channel: "digest", idempotency_key: request.idempotency_key,
+      intent_payload: request.to_h, status: "processing", attempts: 1, available_at: @now, locked_at: @now,
+      lock_token: "b" * 64
+    )
+    dispatcher = Object.new
+    dispatcher.define_singleton_method(:call) { |request:| [{"provider_message_id" => 501}] }
+    receipts = []
+    recorder = Object.new
+    recorder.define_singleton_method(:record) { |**receipt| receipts << receipt }
+
+    PrismHub::UseCases::ProcessDeliveryOutbox.new(
+      outbox_repository: Repository.new([entry]), dispatch_delivery: dispatcher, clock: -> { @now },
+      view_receipts: recorder
+    ).call(limit: 1, lease_seconds: 300)
+
+    assert_equal [{workspace: "personal", slot: "board", revision: 4, message_id: 501}], receipts
+  end
+
   def test_transient_delivery_failure_schedules_retry
     error = PrismHub::ExecutionUnavailableError.new(
       "hub.bot.delivery.unavailable",

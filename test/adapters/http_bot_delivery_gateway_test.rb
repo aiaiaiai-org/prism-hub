@@ -38,6 +38,33 @@ class HttpBotDeliveryGatewayTest < Minitest::Test
     refute_equal keys[0], keys[1]
   end
 
+  def test_a_view_edits_deletes_and_silences_through_the_bot_contract
+    transport = FakeTransport.new([response_for(77), response_for(78)])
+    gateway = gateway_for(transport)
+    view = PrismHub::Domain::DeliveryView.new(edit_message_id: 77, delete_message_ids: [70, 71], silent: true, slot: "board", revision: 3)
+
+    results = gateway.deliver(intent: intent_for(["board"]), binding: binding_for, view: view)
+    gateway.deliver(intent: intent_for(["plain"]), binding: binding_for)
+
+    body = JSON.parse(transport.requests[0].fetch(:body))
+    assert_equal 77, body.fetch("edit_message_id")
+    assert_equal [70, 71], body.fetch("delete_message_ids")
+    assert_equal true, body.fetch("silent")
+    refute body.key?("slot"), "the slot is the hub's, not the bot's"
+    assert_equal 77, results.last.fetch("provider_message_id")
+    plain = JSON.parse(transport.requests[1].fetch(:body))
+    assert_equal %w[chat_id idempotency_key message_thread_id text], plain.keys.sort
+  end
+
+  def test_a_view_needs_exactly_one_chunk
+    view = PrismHub::Domain::DeliveryView.new(edit_message_id: 5)
+    error = assert_raises(PrismHub::InputError) do
+      gateway_for(FakeTransport.new([])).deliver(intent: intent_for(["a", "b"]), binding: binding_for, view: view)
+    end
+
+    assert_equal "hub.bot.delivery.view.multi_chunk", error.code
+  end
+
   def test_rejects_a_binding_for_another_logical_context
     error = assert_raises(PrismHub::InputError) do
       gateway_for(FakeTransport.new([])).deliver(intent: intent_for(["first"]), binding: binding_for(logical_channel: "other"))

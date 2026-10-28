@@ -14,7 +14,7 @@ module PrismHub
       IDEMPOTENCY_KEY_PATTERN = /\A[0-9a-f]{64}\z/
       ARTIFACT_KEYS = %w[artifact_id artifact_kind payload].freeze
 
-      attr_reader :artifact, :routes, :workspace, :channel, :idempotency_key, :chunk_max_chars_limit
+      attr_reader :artifact, :routes, :workspace, :channel, :idempotency_key, :chunk_max_chars_limit, :view
 
       def self.from_h(value)
         unless value.is_a?(Hash) && value["schema_version"] == SCHEMA_VERSION
@@ -30,7 +30,8 @@ module PrismHub
           workspace: value.fetch("workspace"),
           channel: value.fetch("channel"),
           idempotency_key: value.fetch("idempotency_key"),
-          chunk_max_chars_limit: value["chunk_max_chars_limit"]
+          chunk_max_chars_limit: value["chunk_max_chars_limit"],
+          view: DeliveryView.from_h(value["view"])
         )
       rescue KeyError
         raise InputError.new(
@@ -39,18 +40,19 @@ module PrismHub
         )
       end
 
-      def initialize(artifact:, routes:, workspace:, channel:, idempotency_key:, chunk_max_chars_limit: nil)
+      def initialize(artifact:, routes:, workspace:, channel:, idempotency_key:, chunk_max_chars_limit: nil, view: nil)
         @artifact = artifact_value(artifact)
         @routes = routes_value(routes)
         @workspace = logical_identifier(workspace, "workspace")
         @channel = logical_identifier(channel, "channel")
         @idempotency_key = idempotency_key_value(idempotency_key)
         @chunk_max_chars_limit = optional_limit(chunk_max_chars_limit)
+        @view = view_value(view)
         freeze
       end
 
       def to_h
-        {
+        value = {
           "schema_version" => SCHEMA_VERSION,
           "artifact" => artifact,
           "routes" => routes,
@@ -58,7 +60,10 @@ module PrismHub
           "channel" => channel,
           "idempotency_key" => idempotency_key,
           "chunk_max_chars_limit" => chunk_max_chars_limit
-        }.freeze
+        }
+        # Absent rather than null, so a request without a view stores exactly as before.
+        value["view"] = view.to_h if view
+        value.freeze
       end
 
       private
@@ -102,6 +107,12 @@ module PrismHub
           "hub.delivery_request.idempotency_key.invalid",
           "delivery request idempotency key is invalid"
         )
+      end
+
+      def view_value(value)
+        return value if value.nil? || value.is_a?(DeliveryView)
+
+        raise InputError.new("hub.delivery_request.view.invalid", "view must be a DeliveryView")
       end
 
       def optional_limit(value)
