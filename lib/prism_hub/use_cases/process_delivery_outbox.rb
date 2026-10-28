@@ -7,9 +7,10 @@ module PrismHub
       DEFAULT_RETRY_SECONDS = 30
       DEFAULT_RATE_LIMIT_RETRY_SECONDS = 60
 
-      def initialize(outbox_repository:, dispatch_delivery:, clock: -> { Time.now.utc }, retry_seconds: DEFAULT_RETRY_SECONDS, rate_limit_retry_seconds: DEFAULT_RATE_LIMIT_RETRY_SECONDS)
+      def initialize(outbox_repository:, dispatch_delivery:, clock: -> { Time.now.utc }, retry_seconds: DEFAULT_RETRY_SECONDS, rate_limit_retry_seconds: DEFAULT_RATE_LIMIT_RETRY_SECONDS, view_receipts: Ports::DeliveryViewReceipts.new)
         @outbox_repository = outbox_repository
         @dispatch_delivery = dispatch_delivery
+        @view_receipts = view_receipts
         @clock = clock
         @retry_seconds = positive_integer(retry_seconds, "retry_seconds")
         @rate_limit_retry_seconds = positive_integer(rate_limit_retry_seconds, "rate_limit_retry_seconds")
@@ -25,7 +26,8 @@ module PrismHub
 
       def process(entry)
         request = Domain::DeliveryRequest.from_h(entry.intent_payload)
-        @dispatch_delivery.call(request: request)
+        results = @dispatch_delivery.call(request: request)
+        record_receipt(request, results)
         @outbox_repository.mark_delivered(
           id: entry.id,
           lock_token: entry.lock_token,
@@ -55,6 +57,20 @@ module PrismHub
           failed_at: @clock.call.utc,
           error_code: "hub.delivery.worker.unexpected",
           error_details: {"cause" => error.class.name}
+        )
+      end
+
+      # The message a board or status now lives in, so the next change edits it. A receipt that
+      # cannot be recorded does not undo a delivery the person already has.
+      def record_receipt(request, results)
+        view = request.view
+        return unless view&.slot
+
+        message_id = Array(results).last&.fetch("provider_message_id", nil)
+        return unless message_id.is_a?(Integer) && message_id.positive?
+
+        @view_receipts.record(
+          workspace: request.workspace, slot: view.slot, revision: view.revision, message_id: message_id
         )
       end
 

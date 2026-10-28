@@ -18,17 +18,24 @@ module PrismHub
         @transport = transport || method(:request)
       end
 
-      def deliver(intent:, binding:)
+      def deliver(intent:, binding:, view: nil)
         validate_inputs!(intent, binding)
+        if view && intent.chunks.length != 1
+          # An edit replaces one message; a view over several chunks has no single message to keep.
+          raise InputError.new(
+            "hub.bot.delivery.view.multi_chunk",
+            "a delivery that edits or deletes messages must render to exactly one chunk"
+          )
+        end
         results = intent.chunks.map do |chunk|
-          deliver_chunk(intent: intent, binding: binding, chunk: chunk)
+          deliver_chunk(intent: intent, binding: binding, chunk: chunk, view: view)
         end
         results.freeze
       end
 
       private
 
-      def deliver_chunk(intent:, binding:, chunk:)
+      def deliver_chunk(intent:, binding:, chunk:, view: nil)
         idempotency_key = Digest::SHA256.hexdigest(
           [intent.idempotency_key, chunk.position].join("\0")
         )
@@ -41,10 +48,12 @@ module PrismHub
             "x-prism-bot-delivery-secret" => @secret
           },
           body: JSON.generate(
-            "chat_id" => binding.chat_id,
-            "message_thread_id" => binding.message_thread_id,
-            "text" => chunk.text,
-            "idempotency_key" => idempotency_key
+            {
+              "chat_id" => binding.chat_id,
+              "message_thread_id" => binding.message_thread_id,
+              "text" => chunk.text,
+              "idempotency_key" => idempotency_key
+            }.merge(view ? view.to_bot : {})
           )
         )
         response = Response.new(status: Integer(raw.fetch(:status)), body: String(raw.fetch(:body)))

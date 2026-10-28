@@ -117,6 +117,17 @@ Queued in the outbox as a `prism-hub.delivery-request.v1` envelope with artifact
 
 `event` is `alert` or `retraction`. `event_at` and `event_url` are the statement that caused this message: the post that reported the threat, or the one that called it off. `sources` contains at most eight **different channel identifiers**, each represented by its newest source report. When `active_sources` is available, active channels are selected first; if absent (older runtime), citations fall back to one latest report per channel. A frequent poster cannot suppress the other configured sources. The full historical `source_reports` array is preserved separately in the threat registry. Porter (`signal.alert`, `prism-hub.signal-alert.v1`) renders it in Ukrainian. `still_active` is filled only for a retraction. The idempotency key is derived from the assessment, the workspace, and the kind, so a retry can never queue a second message.
 
+## Live board and status
+
+With `PRISM_SIGNAL_DELIVERY=board` (the default) a person gets two messages instead of one per report:
+
+- **The board** lists every threat that concerns them: kind, count, where it is and where it heads, when it was last seen. The source travels in the payload for audit; Porter does not show it. It is posted once, silently, and then **edited in place** as tracks move, merge, go quiet or end. Threats stay on it until a source calls them off (`neutralized`, `cleared`) or they go `stale`; a quiet track stays, marked as quiet.
+- **The status** is one line on how close the danger is: `here` (a track's cells cover the person's cell), `region` (only its oblast, and only with `include_nearby`), or `quiet`. It is **sent anew with a sound only when the danger grows** (a higher level, or a new kind at the same level); the old status is deleted so the chat never holds two. Otherwise it is edited silently.
+- When nothing concerns the person any more, the status becomes a quiet one (sent silently; never phrased as an all-clear) and the board closes with how many threats ended. The next attack starts a new board.
+- Only that quiet status may ask whether the person is still where they said: when their cell is more than 3 days old, at most once a day.
+
+What to say and when is `Domain::SignalBoardPlan`; Porter renders `signal.board` (`prism-hub.signal-board.v1`) and `signal.status` (`prism-hub.signal-status.v1`). `RefreshSignalBoards` queues each change with a delivery `view` (edit, delete, silent) and keeps the state in `signal_boards`, one row per workspace, holding message ids, digests and the shown track ids, never a position. The delivery worker records the message id the bot returns; a receipt for an older revision, or for a board that has since closed, is ignored. Clearing a subscription deletes the row.
+
 ## Configuration
 
 | Variable | Default | Meaning |
@@ -127,9 +138,10 @@ Queued in the outbox as a `prism-hub.delivery-request.v1` envelope with artifact
 | `PRISM_SIGNAL_RUNTIME_COMMAND_JSON` | `["prism-signal-runtime","--json"]` | runtime command |
 | `PRISM_SIGNAL_TIMEOUT_SECONDS` | 60 | per subprocess |
 | `PRISM_SIGNAL_INTERVAL_SECONDS` | 60 | pause between passes |
-| `PRISM_SIGNAL_WINDOW_SECONDS` | 14400 | how long evidence is kept and assessed |
-| `PRISM_SIGNAL_MAX_AGE_SECONDS` | 1800 | events older than this are not sent |
-| `PRISM_SIGNAL_COOLDOWN_SECONDS` | 300 | per person, per class |
+| `PRISM_SIGNAL_DELIVERY` | `board` | `board`: one live board and one status per person; `alerts`: one message per report (rollback) |
+| `PRISM_SIGNAL_WINDOW_SECONDS` | 21600 | how long evidence is kept and assessed |
+| `PRISM_SIGNAL_MAX_AGE_SECONDS` | 1800 | `alerts` only: events older than this are not sent |
+| `PRISM_SIGNAL_COOLDOWN_SECONDS` | 300 | `alerts` only: per person, per class |
 | `PRISM_SIGNAL_ALERT_CHANNEL` | `alerts` | logical channel the bound chat is looked up by |
 | `PRISM_SIGNAL_ONESHOT` | unset | `true` runs one pass and exits |
 

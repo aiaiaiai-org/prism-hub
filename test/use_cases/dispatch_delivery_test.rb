@@ -30,8 +30,9 @@ class DispatchDeliveryTest < Minitest::Test
     end
 
     gateway = Object.new
-    gateway.define_singleton_method(:deliver) do |intent:, binding:|
+    gateway.define_singleton_method(:deliver) do |intent:, binding:, view: nil|
       delivered = [intent, binding]
+      raise "a request without a view passes none" unless view.nil?
       :delivered
     end
 

@@ -48,6 +48,22 @@ begin
     max_age_seconds: positive_integer("PRISM_SIGNAL_MAX_AGE_SECONDS", "1800"),
     cooldown_seconds: positive_integer("PRISM_SIGNAL_COOLDOWN_SECONDS", "300")
   )
+  # `board` keeps one edited board and one status per person; `alerts` is the old
+  # one-message-per-report fan-out, kept for rollback.
+  delivery = ENV.fetch("PRISM_SIGNAL_DELIVERY", "board")
+  unless %w[board alerts].include?(delivery)
+    raise PrismHub::ConfigurationError.new("hub.signal.setting.invalid", "PRISM_SIGNAL_DELIVERY must be board or alerts")
+  end
+  if delivery == "board"
+    fan_out = PrismHub::UseCases::RefreshSignalBoards.new(
+      subscription_repository: PrismHub::Adapters::ActiveRecordAlertSubscriptionRepository.new,
+      binding_repository: PrismHub::Adapters::ActiveRecordTelegramSurfaceBindingRepository.new,
+      board_repository: PrismHub::Adapters::ActiveRecordSignalBoardRepository.new,
+      outbox_repository: PrismHub::Adapters::ActiveRecordDeliveryOutboxRepository.new,
+      logger: logger,
+      channel: ENV.fetch("PRISM_SIGNAL_ALERT_CHANNEL", "alerts")
+    )
+  end
   ingest = PrismHub::UseCases::IngestSignals.new(
     sources: sources,
     gateway: gateway,
@@ -56,7 +72,7 @@ begin
     ledger: ledger,
     fan_out: fan_out,
     logger: logger,
-    window_seconds: positive_integer("PRISM_SIGNAL_WINDOW_SECONDS", "14400")
+    window_seconds: positive_integer("PRISM_SIGNAL_WINDOW_SECONDS", "21600")
   )
   scheduler = PrismHub::UseCases::SignalScheduler.new(
     ingest: ingest,

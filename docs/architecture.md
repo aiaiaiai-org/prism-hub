@@ -109,6 +109,16 @@ a split sized for the widest cannot be delivered to the rest. An operator ceilin
 (`PRISM_PORTER_CHUNK_MAX_CHARS`) may only lower that result, never raise it past what
 a surface accepts.
 
+A request may also carry a `view`: replace a message sent earlier
+(`edit_message_id`), remove the ones it supersedes (`delete_message_ids`), arrive
+without a sound (`silent`), and name what it is for (`slot` `board` or `status`,
+with a `revision`). The bot acts on the first three (its `/api/v1/delivery`
+contract); the hub keeps the rest. A view needs exactly one chunk, since an edit
+replaces one message. After delivery the worker hands the bot's
+`provider_message_id` to `DeliveryViewReceipts`, so the next change to that board
+or status edits the message the person already has. A request without a view is
+stored and delivered exactly as before.
+
 Porter never receives Telegram chat IDs, topic IDs, bot tokens, or provider
 credentials. Concrete transport coordinates remain Hub-owned state. Resolving a
 logical context to a persisted Telegram surface binding and dispatching the
