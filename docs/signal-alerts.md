@@ -121,7 +121,7 @@ Queued in the outbox as a `prism-hub.delivery-request.v1` envelope with artifact
 
 With `PRISM_SIGNAL_DELIVERY=board` (the default) a person gets two messages instead of one per report:
 
-- **The board** lists every threat that concerns them: kind, count, where it is and where it heads, the channel, when it was last seen. It is posted once, silently, and then **edited in place** as tracks move, merge, go quiet or end. Threats stay on it until a source calls them off (`neutralized`, `cleared`) or they go `stale`; a quiet track stays, marked as quiet.
+- **The board** lists every threat that concerns them: kind, count, where it is and where it heads, when it was last seen. The source travels in the payload for audit; Porter does not show it. It is posted once, silently, and then **edited in place** as tracks move, merge, go quiet or end. Threats stay on it until a source calls them off (`neutralized`, `cleared`) or they go `stale`; a quiet track stays, marked as quiet.
 - **The status** is one line on how close the danger is: `here` (a track's cells cover the person's cell), `region` (only its oblast, and only with `include_nearby`), or `quiet`. It is **sent anew with a sound only when the danger grows** (a higher level, or a new kind at the same level); the old status is deleted so the chat never holds two. Otherwise it is edited silently.
 - When nothing concerns the person any more, the status becomes a quiet one (sent silently; never phrased as an all-clear) and the board closes with how many threats ended. The next attack starts a new board.
 - Only that quiet status may ask whether the person is still where they said: when their cell is more than 3 days old, at most once a day.
@@ -149,7 +149,7 @@ A channel name is checked against Telegram's rules for a public username before 
 
 ## Limits
 
-- The sources are unofficial and the reading is heuristic. The window and the runtime cannot make a report true; alerts and retractions are proposals from channels, and Porter's wording must say so. Neither `retracted` nor `expired` represents an **official air-raid all-clear**. `likelihood` and channel count are not calibrated risk or proof of independent reporting.
+- The input reports are not official air-raid warnings. The collector and runtime cannot make a report true; Porter presents threat and update time without displaying provider names, channel IDs or post URLs, while retaining a clear unofficial-service warning. Neither `retracted` nor `expired` represents an **official air-raid all-clear**. `likelihood` and channel count are not calibrated risk or proof of independent reporting.
 - A stale or unreadable source is logged and not announced. Silence from the hub is not safety.
 - An episode that outlives the window is re-identified once its first post is dropped, so a person may be told again after the cool-down. That is a true statement about an ongoing threat.
 - Alerts are only as good as the subscription's cell: about 3 km, and the cover already adds one ring of margin.
