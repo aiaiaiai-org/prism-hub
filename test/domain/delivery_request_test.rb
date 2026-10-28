@@ -78,6 +78,32 @@ class DeliveryRequestTest < Minitest::Test
     end
   end
 
+  def test_a_view_survives_the_round_trip_and_a_request_without_one_is_unchanged
+    view = PrismHub::Domain::DeliveryView.new(edit_message_id: 9, delete_message_ids: [7], silent: true, slot: "status", revision: 2)
+    request = build(view: view)
+    restored = PrismHub::Domain::DeliveryRequest.from_h(JSON.parse(JSON.generate(request.to_h)))
+
+    assert_equal request.to_h, restored.to_h
+    assert_equal 9, restored.view.edit_message_id
+    refute build.to_h.key?("view"), "a request without a view stores exactly as before"
+    assert_nil PrismHub::Domain::DeliveryRequest.from_h(JSON.parse(JSON.generate(build.to_h))).view
+  end
+
+  def test_a_view_refuses_what_the_bot_would_refuse
+    [
+      {edit_message_id: 0},
+      {delete_message_ids: [-1]},
+      {delete_message_ids: (1..11).to_a},
+      {silent: "yes"},
+      {slot: "banner", revision: 1},
+      {slot: "board"},
+      {revision: 1}
+    ].each do |attributes|
+      error = assert_raises(PrismHub::InputError, attributes.inspect) { PrismHub::Domain::DeliveryView.new(**attributes) }
+      assert_equal "hub.delivery_request.view.invalid", error.code
+    end
+  end
+
   private
 
   def build(**overrides)

@@ -4,7 +4,9 @@
 module PrismHub
   module Ports
     class BotDeliveryGateway
-      def deliver(intent:, binding:)
+      # `view`, when given, asks the bot to edit, delete, or deliver silently; see
+      # Domain::DeliveryView.
+      def deliver(intent:, binding:, view: nil)
         raise NotImplementedError
       end
     end
