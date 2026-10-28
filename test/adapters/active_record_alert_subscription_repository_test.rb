@@ -83,6 +83,7 @@ class ActiveRecordAlertSubscriptionRepositoryTest < Minitest::Test
       assert_equal "hub.alert_subscription.owner_required", error.code
     end
     assert_equal 0, PrismHub::Adapters::ActiveRecordRecords::AlertSubscription.count
+    assert_equal 0, PrismHub::Adapters::ActiveRecordRecords::SignalBoard.count
   end
 
   def test_a_disabled_workspace_cannot_be_subscribed
@@ -94,6 +95,7 @@ class ActiveRecordAlertSubscriptionRepositoryTest < Minitest::Test
 
   def test_clear_deletes_the_row_and_leaves_nothing_behind
     save(Time.utc(2026, 9, 30, 9, 0))
+    PrismHub::Adapters::ActiveRecordRecords::SignalBoard.create!(workspace: @workspace, level: "here")
 
     assert_nil @repository.clear(
       workspace_id: @workspace.identifier,
@@ -103,6 +105,13 @@ class ActiveRecordAlertSubscriptionRepositoryTest < Minitest::Test
 
     assert_nil @repository.find(workspace_id: @workspace.identifier)
     assert_equal 0, PrismHub::Adapters::ActiveRecordRecords::AlertSubscription.count
+  end
+
+  def test_all_lists_every_subscription
+    assert_empty @repository.all
+    save(Time.utc(2026, 9, 30, 9, 0))
+
+    assert_equal [@workspace.identifier], @repository.all.map(&:workspace_id)
   end
 
   def test_clear_is_idempotent_and_still_checks_the_owner
@@ -174,6 +183,7 @@ class ActiveRecordAlertSubscriptionRepositoryTest < Minitest::Test
   def clear_tables
     connection = ActiveRecord::Base.connection
     %w[
+      signal_boards
       alert_subscriptions
       workspace_memberships
       provider_identity_bindings

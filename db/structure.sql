@@ -310,6 +310,34 @@ CREATE TABLE public.signal_alert_deliveries (
 
 
 --
+-- Name: signal_boards; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.signal_boards (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    workspace_id uuid NOT NULL,
+    board_message_id bigint,
+    board_revision integer DEFAULT 0 NOT NULL,
+    board_floor_revision integer DEFAULT 0 NOT NULL,
+    board_digest character varying(64),
+    board_sent_at timestamp(6) without time zone,
+    status_message_id bigint,
+    status_revision integer DEFAULT 0 NOT NULL,
+    status_digest character varying(64),
+    status_sent_at timestamp(6) without time zone,
+    level character varying(8) DEFAULT 'quiet'::character varying NOT NULL,
+    hazards character varying[] DEFAULT '{}'::character varying[] NOT NULL,
+    shown_track_ids character varying[] DEFAULT '{}'::character varying[] NOT NULL,
+    ended_count integer DEFAULT 0 NOT NULL,
+    episode_started_at timestamp(6) without time zone,
+    position_reminded_at timestamp(6) without time zone,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL,
+    CONSTRAINT signal_boards_level_check CHECK (((level)::text = ANY ((ARRAY['quiet'::character varying, 'region'::character varying, 'here'::character varying])::text[])))
+);
+
+
+--
 -- Name: signal_evidence; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -362,10 +390,10 @@ CREATE TABLE public.signal_threat_records (
     updated_at timestamp(6) without time zone NOT NULL,
     CONSTRAINT signal_threat_records_active_sources_array_check CHECK (((active_sources IS NULL) OR (jsonb_typeof(active_sources) = 'array'::text))),
     CONSTRAINT signal_threat_records_arrival_provenance_check CHECK ((((reported_arrival_from IS NULL) AND (reported_arrival_until IS NULL) AND (arrival_source_url IS NULL)) OR ((reported_arrival_from IS NOT NULL) AND (reported_arrival_until IS NOT NULL) AND (reported_arrival_from <= reported_arrival_until) AND (arrival_source_url IS NOT NULL)))),
-    CONSTRAINT signal_threat_records_class_check CHECK (((hazard_class)::text = ANY ((ARRAY['drone'::character varying, 'bomb'::character varying, 'missile'::character varying])::text[]))),
+    CONSTRAINT signal_threat_records_class_check CHECK (((hazard_class)::text = ANY (ARRAY[('drone'::character varying)::text, ('bomb'::character varying)::text, ('missile'::character varying)::text]))),
     CONSTRAINT signal_threat_records_report_order_check CHECK ((last_reported_at >= first_reported_at)),
     CONSTRAINT signal_threat_records_reports_array_check CHECK ((jsonb_typeof(source_reports) = 'array'::text)),
-    CONSTRAINT signal_threat_records_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'expired'::character varying, 'retracted'::character varying])::text[])))
+    CONSTRAINT signal_threat_records_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('expired'::character varying)::text, ('retracted'::character varying)::text])))
 );
 
 
@@ -588,6 +616,14 @@ ALTER TABLE ONLY public.signal_alert_deliveries
 
 
 --
+-- Name: signal_boards signal_boards_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.signal_boards
+    ADD CONSTRAINT signal_boards_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: signal_evidence signal_evidence_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -734,6 +770,13 @@ CREATE INDEX idx_signal_alert_deliveries_created_at ON public.signal_alert_deliv
 --
 
 CREATE UNIQUE INDEX idx_signal_alert_deliveries_once ON public.signal_alert_deliveries USING btree (assessment_id, workspace_id, delivery_kind);
+
+
+--
+-- Name: idx_signal_boards_workspace; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_signal_boards_workspace ON public.signal_boards USING btree (workspace_id);
 
 
 --
@@ -1044,6 +1087,14 @@ ALTER TABLE ONLY public.telegram_surface_bindings
 
 
 --
+-- Name: signal_boards fk_rails_5d072be77c; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.signal_boards
+    ADD CONSTRAINT fk_rails_5d072be77c FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
+
+
+--
 -- Name: channel_grants fk_rails_7d12b56971; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1154,6 +1205,7 @@ ALTER TABLE ONLY public.social_account_accesses
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20261028080000'),
 ('20261023070000'),
 ('20260930100000'),
 ('20260930090000'),

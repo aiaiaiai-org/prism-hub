@@ -12,7 +12,7 @@ module PrismHub
       MAX_EVIDENCE = 500
 
       def initialize(sources:, gateway:, window_repository:, threat_registry:, ledger:, fan_out:, logger:,
-        window_seconds: 14_400, ledger_retention_seconds: 86_400)
+        window_seconds: 21_600, ledger_retention_seconds: 86_400)
         @sources = sources
         @gateway = gateway
         @window = window_repository
@@ -39,7 +39,9 @@ module PrismHub
         assessed = @gateway.assess(evidence: balanced_evidence(since), evaluation_time: now)
         # Register first: a send must refer to an incident we can later audit.
         @threat_registry.sync(assessments: assessed.assessments, now: now)
-        summary = @fan_out.call(assessments: assessed.assessments, events: assessed.events, now: now)
+        summary = @fan_out.call(
+          assessments: assessed.assessments, events: assessed.events, tracks: Array(assessed.tracks), now: now
+        )
         @ledger.prune(before: now - @ledger_retention_seconds)
         Result.new(read: read, failed_sources: failed, summary: summary)
       end

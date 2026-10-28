@@ -32,7 +32,7 @@ module PrismHub
       end
 
       def assess(evidence:, evaluation_time:)
-        return Assessed.new(assessments: [], events: []) if evidence.empty?
+        return Assessed.new(assessments: [], events: [], tracks: []) if evidence.empty?
 
         if evidence.length > MAX_EVIDENCE
           raise InputError.new("hub.signal.window.too_large", "the window holds more evidence than one request may carry")
@@ -48,7 +48,12 @@ module PrismHub
             "observations" => observations
           }
         )
-        Assessed.new(assessments: assessed.fetch("assessments"), events: assessed.fetch("events"))
+        # Tracks are additive in prism-signal.v1: an older runtime has none.
+        Assessed.new(
+          assessments: assessed.fetch("assessments"),
+          events: assessed.fetch("events"),
+          tracks: assessed.fetch("tracks", [])
+        )
       rescue KeyError
         raise invalid_runtime("the result is missing what the contract requires")
       end

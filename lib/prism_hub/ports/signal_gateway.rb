@@ -6,7 +6,7 @@ module PrismHub
     # Signal's business; the hub only decides whom to tell.
     class SignalGateway
       Polled = Struct.new(:evidence, keyword_init: true)
-      Assessed = Struct.new(:assessments, :events, keyword_init: true)
+      Assessed = Struct.new(:assessments, :events, :tracks, keyword_init: true)
 
       # Evidence from `source` newer than `after` (an opaque cursor, nil for the first read).
       def poll(source:, after:)

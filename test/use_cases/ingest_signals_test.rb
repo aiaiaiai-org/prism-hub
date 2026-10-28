@@ -110,7 +110,7 @@ class IngestSignalsTest < Minitest::Test
   end
 
   def test_the_window_holds_only_what_is_recent_enough
-    @gateway.pages = [[item(100, "old", at: NOW - 5 * 3600), item(101, "recent", at: NOW - 60)]]
+    @gateway.pages = [[item(100, "old", at: NOW - 7 * 3600), item(101, "recent", at: NOW - 60)]]
 
     @ingest.call(now: NOW)
 
