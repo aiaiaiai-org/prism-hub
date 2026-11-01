@@ -1,89 +1,57 @@
 # Production deployment
 
-Prism Hub production delivery is delegated to the canonical
-`aiaiaiai-org/infra` repository.
+Prism Hub publishes; `aiaiaiai-org/infra` deploys. This repository holds no
+credential for infra and never dispatches to it.
 
-The repository-side workflow resolves a published release image, requests the
-target's public encryption recipient from infra, encrypts producer-owned
-runtime credentials and dispatches `deploy-workload` for `prism-hub`.
-The **Deploy Prism PostgreSQL** workflow uses the same recipient handoff for
-the database password, but is only for explicit database activation.
+## Delivery chain
 
-The infra repository owns the deployment target, SSH credentials, release
-layout, systemd service, activation, rollback and retention policy.
+`Full CI (master) → Publish image → ghcr.io + provenance attestation → infra Reconcile deliveries → infra Deploy workload → edge-prod-2`
 
-A merge never triggers production deployment automatically.
+1. **Full CI** verifies a commit on `master`.
+2. **Publish image** (`.github/workflows/publish.yml`) runs only after a green
+   Full CI for the current `master` head. It builds that exact commit, pushes
+   `ghcr.io/aiaiaiai-org/prism-hub:<full commit SHA>` and attests the digest's
+   build provenance with this workflow's own OIDC identity. A late build of a
+   superseded commit is skipped.
+3. **Infra** finds the branch head's image, verifies the attestation came from
+   this repository, this workflow, `refs/heads/master` and that commit, and
+   deploys it through its own **Deploy workload**, with placement, health
+   checks and the deployment record (`delivery/prism-hub`). See infra's
+   `docs/automatic-delivery.md`.
 
-## GitHub Environment
-
-Create or use the `production` Environment in this repository.
-
-Required Environment secret:
-
-- `INFRA_DEPLOY_TOKEN` — fine-grained GitHub token scoped to
-  `aiaiaiai-org/infra` with Contents: write and Actions: read.
-- `PRISM_POSTGRES_PASSWORD`, `PRISM_HUB_SECRET_KEY_BASE` and
-  `PRISM_BOT_DELIVERY_SECRET` — producer-owned runtime secrets.
-
-Do not configure `INFRA_AGE_RECIPIENT`. Infra publishes a short-lived
-public-only recipient artifact for each manual deployment request.
-
-The repository no longer stores or consumes production SSH credentials.
-
-Do not add these secrets back to this repository:
-
-- `SSH_HOST`
-- `SSH_USER`
-- `SSH_PRIVATE_KEY`
-- `SSH_KNOWN_HOSTS`
-- `SSH_PORT`
-
-Those credentials belong to the target Environment managed by
-`aiaiaiai-org/infra`.
+Publishing is the last step this repository owns. Whether a release is live is
+answered by infra's **Deliver workload** run and its `delivery/prism-hub`
+deployment, not by this repository. Rollbacks are manual in infra: **Deploy
+workload** with an earlier verified digest.
 
 ## Runtime configuration
 
-Infra's workload contracts allowlist runtime credential **names** and own
-persistent state. Secret **values** remain in the producer's GitHub Environment.
-The workflow encrypts only the required values with the target SSH public key
-and sends the armored `secrets_age` envelope in `repository_dispatch`.
-Infra decrypts it under its SSH identity; no plaintext application secrets
-are included in the dispatch. The recipient artifact contains no private key.
+The `prism-hub` workload contract in `aiaiaiai-org/infra` is authoritative for
+the target, container placement and networking, the runtime environment, the
+secret allowlist, activation, health checks and rollback. This repository does
+not duplicate those values.
 
-## Deployment contract
+Runtime secret values live in infra's target Environment (`edge-prod-2`), named
+by the contract: `PRISM_POSTGRES_PASSWORD`, `PRISM_HUB_SECRET_KEY_BASE` and
+`PRISM_BOT_DELIVERY_SECRET`. A secret the contract names but the Environment
+lacks stops the deployment before anything changes. The database itself
+(`prism-postgres`) is pinned by its contract and deployed by hand from infra.
 
-The `prism-hub` workload contract in `aiaiaiai-org/infra` is authoritative
-for:
+The registry pull uses infra's own token: the `prism-hub` package grants
+`aiaiaiai-org/infra` **Read** (Package settings → Manage Actions access).
 
-- production target;
-- container placement and networking;
-- runtime secret allowlist and image selection;
-- activation, health checks and rollback.
+## This repository's `production` Environment
 
-The Prism Hub repository does not duplicate those values.
+It keeps only what this repository still uses itself:
 
-## Running a deploy
+- `PRISM_BOT_DELIVERY_SECRET` — for **Verify h-ua delivery**, the manual
+  handshake against the bot. It must equal infra's copy and
+  `0x0sky/h-ua-bot → production → HUA_DELIVERY_SECRET`.
 
-Use **Actions → Deploy production → Run workflow**.
-
-The optional `ref` input defaults to `master`. The workflow verifies that
-the ref exists and has a published immutable image. It retrieves a public
-recipient from infra, encrypts the producer-owned credentials and dispatches
-the workload to `aiaiaiai-org/infra`. This requires an infra-scoped token
-authorized for Contents: write and Actions: read.
-
-Activation happens only after the infra repository resolves the workload
-contract and obtains its own production Environment credentials.
-
-## Operational boundary
-
-The deployment chain is:
-
-`prism-hub → repository_dispatch → aiaiaiai-org/infra → SSH → production host`
-
-The first arrow carries the image reference and encrypted credential envelope.
-SSH private material never leaves infra. A successful producer dispatch
-is not proof of activation; check the corresponding infra Deploy workload run.
+`INFRA_DEPLOY_TOKEN`, `PRISM_POSTGRES_PASSWORD` and `PRISM_HUB_SECRET_KEY_BASE`
+are no longer read here and can be deleted. Never add SSH credentials
+(`SSH_HOST`, `SSH_USER`, `SSH_PRIVATE_KEY`, `SSH_KNOWN_HOSTS`, `SSH_PORT`): they
+belong to infra's target Environment.
 
 ## Container image
 
@@ -98,10 +66,9 @@ is not proof of activation; check the corresponding infra Deploy workload run.
 
 The image holds no secret. Configuration is the environment: `DATABASE_URL`, `SECRET_KEY_BASE`, `PRISM_BOT_ORIGIN`, `PRISM_BOT_DELIVERY_SECRET`, `PRISM_SIGNAL_SOURCES_JSON`, and the rest of `.env.example`. The image sets the paths of Porter and the signal binaries, `PORT=1927`, and `RAILS_FORCE_SSL=false` because TLS ends at the edge.
 
-`.github/workflows/image.yml` proves the image builds on every pull request and publishes `ghcr.io/aiaiaiai-org/prism-hub:<commit>` on a merge to `master`. Publishing an image does not deploy it.
+`.github/workflows/image.yml` proves the image builds on every pull request. `.github/workflows/publish.yml` publishes and attests it once Full CI has verified the `master` head; infra delivers it from there.
 
-The `prism-hub` workload contract is already present in infra, and a
-container workload is dispatched with an `image`, not a `ref`.
+Infra deploys a container workload by its immutable digest, never by a ref.
 
 
 <!-- © 2026 aiaiaiai · aiaiaiai.org -->

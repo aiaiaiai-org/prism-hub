@@ -5,10 +5,9 @@ name: Validate deploy
 on:
   pull_request:
     paths:
-      - '.github/workflows/deploy-production.yml'
-      - '.github/workflows/deploy-postgres.yml'
-      - 'script/fetch-infra-recipient.sh'
-      - 'script/test-fetch-infra-recipient.sh'
+      - '.github/workflows/publish.yml'
+      - '.github/workflows/image.yml'
+      - 'Dockerfile'
       - '.github/workflows/verify-hua-delivery.yml'
       - 'script/check-hua-delivery-handshake.sh'
       - 'script/test-hua-delivery-handshake.sh'
@@ -40,62 +39,49 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Validate workflow contract
+      - name: Validate publish contract
         shell: bash
         run: |
           set -Eeuo pipefail
 
-          ruby <<'RUBY'
-          deploy = File.read('.github/workflows/deploy-production.yml')
-          validate = File.read('.github/workflows/validate-deploy.yml')
-          postgres = File.read('.github/workflows/deploy-postgres.yml')
-          recipient = File.read('script/fetch-infra-recipient.sh')
+          ruby -ryaml <<'RUBY'
+          publish = File.read('.github/workflows/publish.yml', encoding: 'UTF-8')
+          image = File.read('.github/workflows/image.yml', encoding: 'UTF-8')
 
+          # infra's prism-hub contract verifies provenance from exactly this signer workflow,
+          # for refs/heads/master and the commit the image is tagged with.
           required = [
-            'workflow_dispatch:',
-            'inputs:',
-            'environment: production',
-            'contents: read',
-            'secrets.INFRA_DEPLOY_TOKEN',
-            'https://api.github.com/repos/aiaiaiai-org/infra/dispatches',
-            '"event_type": "deploy-workload"',
-            '"workload": "prism-hub"',
-            '"image": os.environ["RELEASE_IMAGE"]',
-            'ghcr.io/${GITHUB_REPOSITORY,,}:${sha}',
-            'packages: read',
-            'aiaiaiai-org/infra',
+            'workflows: [Full CI]',
+            'branches: [master]',
+            "github.event.workflow_run.conclusion == 'success'",
+            '.path == ".github/workflows/full-ci.yml"',
+            'git rev-parse origin/master',
+            '"$sha" != "$GITHUB_SHA"',
+            'tags: ghcr.io/${{ github.repository }}:${{ steps.source.outputs.sha }}',
+            'actions/attest-build-provenance@',
+            'subject-name: ghcr.io/${{ github.repository }}',
+            'subject-digest: ${{ steps.build.outputs.digest }}',
+            'push-to-registry: true',
+            'id-token: write',
+            'attestations: write',
+            'packages: write',
           ]
-          missing = required.reject { |fragment| deploy.include?(fragment) }
-          abort "deploy workflow is missing: #{missing.join(', ')}" unless missing.empty?
+          missing = required.reject { |fragment| publish.include?(fragment) }
+          abort "publish workflow is missing: #{missing.join(', ')}" unless missing.empty?
 
-          abort 'deploy workflow must not deploy on push' if deploy.match?(/^\s+push:\s*$/)
-          abort 'deploy workflow must not contain repository SSH credentials' if deploy.match?(/secrets\.SSH_(HOST|USER|PRIVATE_KEY|KNOWN_HOSTS)/)
-          abort 'deploy workflow must not disable SSH host verification' if deploy.include?('StrictHostKeyChecking=no')
-          abort 'validate workflow must not encode obsolete SSH deployment assumptions' if validate.include?('secrets.' + 'SSH_')
-
-          {'prism-hub' => deploy, 'prism-postgres' => postgres}.each do |workload, workflow|
-            abort "Static recipient variable still used for #{workload}" if workflow.include?('vars.INFRA_AGE_RECIPIENT')
-            abort "Missing recipient request for #{workload}" unless workflow.include?('bash script/fetch-infra-recipient.sh ' + workload)
-            abort "Missing recipient output for #{workload}" unless workflow.include?('steps.recipient.outputs.key')
-            abort "Missing restricted INFRA_DEPLOY_TOKEN for #{workload}" unless workflow.include?('secrets.INFRA_DEPLOY_TOKEN')
-            abort "Deployment must remain manual: #{workload}" unless workflow.include?('workflow_dispatch:')
-            abort "Secret-containing workflow must not deploy on push: #{workload}" if workflow.match?(/^\s+push:\s*$/)
+          # The producer holds no credential for infra and never deploys.
+          workflows = Dir['.github/workflows/*.yml'].to_h { |path| [path, File.read(path, encoding: 'UTF-8')] }
+          workflows.each do |path, text|
+            abort "#{path}: infra credential is obsolete" if text.include?('INFRA_DEPLOY' + '_TOKEN')
+            abort "#{path}: infra is not dispatched; it pulls" if text.include?('aiaiaiai-org/infra/' + 'dispatches')
+            abort "#{path}: repository SSH credentials do not belong here" if text.match?(/secrets\.SSH_(HOST|USER|PRIVATE_KEY|KNOWN_HOSTS)/)
           end
-          abort 'Recipient script must use correlated infra workflow' unless recipient.include?('issue-workload-recipient.yml') && recipient.include?('recipient-')
-          abort 'Recipient script must not request private SSH material' if recipient.include?('SSH_PRIVATE_KEY')
-          abort 'Recipient script must not forward GHCR credentials' if recipient.include?('GHCR_PULL_TOKEN')
-
-          abort 'deploy workflow must delegate target resolution to infra' unless deploy.include?('target, network, secrets and activation: resolved by `aiaiaiai-org/infra`')
-          # prism-hub is a container workload: infra deploys an image, and the caller names no ref.
-          abort 'deploy workflow must dispatch an image, not a ref' if deploy.include?('"ref": os.environ')
+          # Psych reads the bare `on` key as true.
+          triggers = YAML.safe_load(publish).then { |doc| doc[true] || doc['on'] }
+          abort 'publish workflow must start only from Full CI' unless triggers.is_a?(Hash) && triggers.keys == ['workflow_run']
+          abort 'Image must only prove the build' if image.match?(/^\s+push:\s*$/) || image.include?('push: true')
+          abort 'Image must not write packages' if image.include?('packages: write')
           RUBY
-
-      - name: Check encryption recipient script syntax
-        run: bash -n script/fetch-infra-recipient.sh
-
-      - name: Test recipient retry and public-key output safety
-        shell: bash
-        run: bash script/test-fetch-infra-recipient.sh
 
       - name: Validate producer-owned h-ua handshake
         shell: bash

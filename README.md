@@ -102,12 +102,13 @@ declarative configuration and must match the active Prism provider adapter.
 
 ## Production deployment
 
-Production deployment is manual by design. `Validate deploy` checks the
-repository-side contract; `Deploy production` delegates activation to
-`aiaiaiai-org/infra`.
+This repository only publishes: after Full CI verifies a `master` head,
+`Publish image` pushes and attests `ghcr.io/aiaiaiai-org/prism-hub:<commit>`.
+`aiaiaiai-org/infra` verifies that provenance and deploys on its own;
+`Validate deploy` checks the repository-side publish contract.
 
-The infra repository owns production target selection, SSH credentials,
-release activation, rollback, and retention. See
+The infra repository owns production target selection, runtime secrets, SSH
+credentials, release activation, rollback, and retention. See
 [`docs/deployment.md`](docs/deployment.md) for the boundary and Environment
 contract.
 
