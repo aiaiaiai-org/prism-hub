@@ -1,0 +1,109 @@
+# © 2026 aiaiaiai · aiaiaiai.org
+
+# Publishes each master head that Full CI verified and attests its provenance.
+# aiaiaiai-org/infra finds, verifies and deploys it on its own (infra
+# docs/automatic-delivery.md), so this repository holds no credential for infra.
+name: Publish image
+
+on:
+  workflow_run:
+    workflows: [Full CI]
+    types: [completed]
+    branches: [master]
+
+permissions:
+  contents: read
+  actions: read
+  packages: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: prism-hub-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish image
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'master' && github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Select the verified revision
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$RUN_ID" =~ ^[0-9]+$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" > "$RUNNER_TEMP/source-run.json"
+          jq -e '.conclusion == "success" and .path == ".github/workflows/full-ci.yml" and .head_repository.full_name == env.GITHUB_REPOSITORY' "$RUNNER_TEMP/source-run.json"
+          sha="$(jq -r .head_sha "$RUNNER_TEMP/source-run.json")"
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          # Publish only the current master head, and only when this run is for that
+          # same commit: the attestation then binds the image to exactly the commit
+          # infra verifies. A late, superseded build is skipped.
+          head="$(git rev-parse origin/master)"
+          if [[ "$sha" != "$head" || "$sha" != "$GITHUB_SHA" ]]; then
+            echo "::notice::Skipping superseded revision $sha; master is at $head"
+            echo "current=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Buildx
+        if: steps.source.outputs.current == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: steps.source.outputs.current == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish the verified revision
+        if: steps.source.outputs.current == 'true'
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          # The tag is the commit: infra locates the image by the branch head, then
+          # trusts only the digest and its provenance.
+          tags: ghcr.io/${{ github.repository }}:${{ steps.source.outputs.sha }}
+          # One plain image manifest; provenance is attested below by this workflow.
+          provenance: false
+          sbom: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Attest build provenance
+        if: steps.source.outputs.current == 'true'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ghcr.io/${{ github.repository }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Publish summary
+        if: steps.source.outputs.current == 'true'
+        env:
+          RELEASE_SHA: ${{ steps.source.outputs.sha }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          {
+            echo "image=ghcr.io/$GITHUB_REPOSITORY:$RELEASE_SHA"
+            echo "digest=$DIGEST"
+            echo 'delivery: aiaiaiai-org/infra Reconcile deliveries picks this up'
+          } >> "$GITHUB_STEP_SUMMARY"

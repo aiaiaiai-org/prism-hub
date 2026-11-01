@@ -6,6 +6,10 @@ All notable changes to Prism Hub will be documented here.
 
 ### Changed
 
+- Delivery moved to `aiaiaiai-org/infra`'s pull model: `Publish image` pushes and attests
+  each Full CI-verified `master` head, and infra deploys it. `Deploy production`,
+  `Deploy Prism PostgreSQL`, the infra recipient scripts and `INFRA_DEPLOY_TOKEN` are removed;
+  runtime secrets live in infra's target Environment.
 - Delivery presentation now runs at dispatch instead of enqueue. The outbox holds a
   `prism-hub.delivery-request.v1` envelope and Porter is invoked once a surface is
   resolved, so the message split follows the target that receives it.
