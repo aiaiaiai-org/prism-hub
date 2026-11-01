@@ -50,6 +50,8 @@ jobs:
 
           # infra's prism-hub contract verifies provenance from exactly this signer workflow,
           # for refs/heads/master and the commit the image is tagged with.
+          # Actions expands an expression marker anywhere in a run script, so it is assembled here.
+          expr = ->(inner) { '$' + '{{ ' + inner + ' }}' }
           required = [
             'workflows: [Full CI]',
             'branches: [master]',
@@ -57,10 +59,10 @@ jobs:
             '.path == ".github/workflows/full-ci.yml"',
             'git rev-parse origin/master',
             '"$sha" != "$GITHUB_SHA"',
-            'tags: ghcr.io/${{ github.repository }}:${{ steps.source.outputs.sha }}',
+            "tags: ghcr.io/#{expr['github.repository']}:#{expr['steps.source.outputs.sha']}",
             'actions/attest-build-provenance@',
-            'subject-name: ghcr.io/${{ github.repository }}',
-            'subject-digest: ${{ steps.build.outputs.digest }}',
+            "subject-name: ghcr.io/#{expr['github.repository']}",
+            "subject-digest: #{expr['steps.build.outputs.digest']}",
             'push-to-registry: true',
             'id-token: write',
             'attestations: write',
