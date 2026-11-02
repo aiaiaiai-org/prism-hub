@@ -107,8 +107,9 @@ This repository only publishes: after Full CI verifies a `master` head,
 `aiaiaiai-org/infra` verifies that provenance and deploys on its own;
 `Validate deploy` checks the repository-side publish contract.
 
-The infra repository owns production target selection, runtime secrets, SSH
-credentials, release activation, rollback, and retention. See
+The infra repository owns production target selection, SSH credentials,
+release activation, rollback, and retention. Runtime secrets stay here and
+reach infra only encrypted, per release. See
 [`docs/deployment.md`](docs/deployment.md) for the boundary and Environment
 contract.
 
