@@ -28,30 +28,29 @@ workload** with an earlier verified digest.
 
 The `prism-hub` workload contract in `aiaiaiai-org/infra` is authoritative for
 the target, container placement and networking, the runtime environment, the
-secret allowlist, activation, health checks and rollback. This repository does
-not duplicate those values.
+secret allowlist (names only), activation, health checks and rollback. This
+repository does not duplicate those values.
 
-Runtime secret values live in infra's target Environment (`edge-prod-2`), named
-by the contract: `PRISM_POSTGRES_PASSWORD`, `PRISM_HUB_SECRET_KEY_BASE` and
-`PRISM_BOT_DELIVERY_SECRET`. A secret the contract names but the Environment
-lacks stops the deployment before anything changes. The database itself
-(`prism-postgres`) is pinned by its contract and deployed by hand from infra.
+Secret **values** never go to infra: infra holds only its own `SSH_*`. They
+stay in this repository's `production` Environment and reach the workload only
+in an envelope encrypted to the target server's public key, published next to
+the image (infra `docs/automatic-delivery.md`, *Product secrets*). Until
+**Publish image** writes that envelope and infra's contract enables delivery
+for `prism-hub`, nothing is delivered automatically.
 
-The registry pull uses infra's own token: the `prism-hub` package grants
-`aiaiaiai-org/infra` **Read** (Package settings → Manage Actions access).
+The registry pull uses infra's own short-lived workflow token: the `prism-hub`
+package grants `aiaiaiai-org/infra` **Read** (Package settings → Manage Actions
+access). That is a setting, not a credential.
 
 ## This repository's `production` Environment
 
-It keeps only what this repository still uses itself:
+- `PRISM_POSTGRES_PASSWORD`, `PRISM_HUB_SECRET_KEY_BASE`,
+  `PRISM_BOT_DELIVERY_SECRET`: runtime secrets owned here. See
+  [`producer-owned-secrets.md`](producer-owned-secrets.md).
 
-- `PRISM_BOT_DELIVERY_SECRET` — for **Verify h-ua delivery**, the manual
-  handshake against the bot. It must equal infra's copy and
-  `0x0sky/h-ua-bot → production → HUA_DELIVERY_SECRET`.
-
-`INFRA_DEPLOY_TOKEN`, `PRISM_POSTGRES_PASSWORD` and `PRISM_HUB_SECRET_KEY_BASE`
-are no longer read here and can be deleted. Never add SSH credentials
-(`SSH_HOST`, `SSH_USER`, `SSH_PRIVATE_KEY`, `SSH_KNOWN_HOSTS`, `SSH_PORT`): they
-belong to infra's target Environment.
+`INFRA_DEPLOY_TOKEN` is no longer read and can be deleted. Never add SSH
+credentials (`SSH_HOST`, `SSH_USER`, `SSH_PRIVATE_KEY`, `SSH_KNOWN_HOSTS`,
+`SSH_PORT`): they belong to infra's target Environment.
 
 ## Container image
 

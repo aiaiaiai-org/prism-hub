@@ -1,17 +1,22 @@
-# Production credentials
+# Producer-owned production credentials
 
-Prism Hub no longer sends credentials to infra. Infra delivers verified images
-on its own (see [`deployment.md`](deployment.md)), so the runtime secret values
-live where the deployment happens: infra's `edge-prod-2` Environment, under the
-names the `prism-hub` workload contract allowlists.
+Prism Hub owns its runtime credentials. Infra deploys the hub but holds only
+its own `SSH_*`; it never stores a Prism secret. The values may be shared with
+another product that needs the same one, never with infra.
 
-| Secret | Where | Notes |
-| --- | --- | --- |
-| `PRISM_POSTGRES_PASSWORD` | `aiaiaiai-org/infra` → `edge-prod-2` | the password `prism-postgres` was created with; changing it later does not change the database |
-| `PRISM_HUB_SECRET_KEY_BASE` | `aiaiaiai-org/infra` → `edge-prod-2` | Rails secret key |
-| `PRISM_BOT_DELIVERY_SECRET` | `aiaiaiai-org/infra` → `edge-prod-2` and `aiaiaiai-org/prism-hub` → `production` | exactly `0x0sky/h-ua-bot` → `production` → `HUA_DELIVERY_SECRET`; this repository keeps a copy only for **Verify h-ua delivery** |
+In the **aiaiaiai-org/prism-hub** GitHub `production` Environment, store:
 
-Never put any of these values in logs. This repository holds no infra token,
-no encryption recipient and no SSH material.
+| Secret | Notes |
+| --- | --- |
+| `PRISM_POSTGRES_PASSWORD` | the password `prism-postgres` was created with, and Hub's `PGPASSWORD`; changing it later does not change the database |
+| `PRISM_HUB_SECRET_KEY_BASE` | Rails secret key |
+| `PRISM_BOT_DELIVERY_SECRET` | exactly `HUA_DELIVERY_SECRET` in `0x0sky/h-ua-bot`'s production Environment; also used by **Verify h-ua delivery** |
+
+They reach the workload only in an `age` envelope encrypted to the target
+server's public SSH key, which infra's server contract publishes. Only infra's
+deploy job, holding that server's private key, can decrypt it, and it keeps
+nothing. Never put any of these values in logs.
+
+This repository holds no infra token and no SSH material.
 
 <!-- © 2026 aiaiaiai · aiaiaiai.org -->
