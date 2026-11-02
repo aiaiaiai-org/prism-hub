@@ -67,6 +67,13 @@ jobs:
             'id-token: write',
             'attestations: write',
             'packages: write',
+            # Runtime secrets leave this repository only sealed to the target's public key.
+            'environment: production',
+            'https://github.com/aiaiaiai-org/infra.git',
+            'encryptionRecipient',
+            'age --recipient "$RECIPIENT"',
+            "tags: ghcr.io/#{expr['github.repository']}:#{expr['steps.source.outputs.sha']}.secrets",
+            "subject-digest: #{expr['steps.envelope.outputs.digest']}",
           ]
           missing = required.reject { |fragment| publish.include?(fragment) }
           abort "publish workflow is missing: #{missing.join(', ')}" unless missing.empty?
@@ -81,6 +88,7 @@ jobs:
           # Psych reads the bare `on` key as true.
           triggers = YAML.safe_load(publish).then { |doc| doc[true] || doc['on'] }
           abort 'publish workflow must start only from Full CI' unless triggers.is_a?(Hash) && triggers.keys == ['workflow_run']
+          abort 'plaintext secrets must not be uploaded' if publish.include?('upload-artifact')
           abort 'Image must only prove the build' if image.match?(/^\s+push:\s*$/) || image.include?('push: true')
           abort 'Image must not write packages' if image.include?('packages: write')
           RUBY

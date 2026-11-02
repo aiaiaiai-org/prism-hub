@@ -13,7 +13,13 @@ credential for infra and never dispatches to it.
    `ghcr.io/aiaiaiai-org/prism-hub:<full commit SHA>` and attests the digest's
    build provenance with this workflow's own OIDC identity. A late build of a
    superseded commit is skipped.
-3. **Infra** finds the branch head's image, verifies the attestation came from
+   In the same run, in this repository's `production` Environment, it seals
+   the runtime secrets with `age` to the target server's public key
+   (`encryptionRecipient` in infra's server contract) and publishes them as
+   `ghcr.io/aiaiaiai-org/prism-hub:<full commit SHA>.secrets`, attested the
+   same way. The secret names come from infra's `prism-hub` contract; if they
+   differ from what this workflow seals, it stops.
+3. **Infra** finds the branch head's image and envelope, verifies the attestation came from
    this repository, this workflow, `refs/heads/master` and that commit, and
    deploys it through its own **Deploy workload**, with placement, health
    checks and the deployment record (`delivery/prism-hub`). See infra's
@@ -33,10 +39,11 @@ repository does not duplicate those values.
 
 Secret **values** never go to infra: infra holds only its own `SSH_*`. They
 stay in this repository's `production` Environment and reach the workload only
-in an envelope encrypted to the target server's public key, published next to
-the image (infra `docs/automatic-delivery.md`, *Product secrets*). Until
-**Publish image** writes that envelope and infra's contract enables delivery
-for `prism-hub`, nothing is delivered automatically.
+in the envelope above (infra `docs/automatic-delivery.md`, *Product secrets*).
+Only infra's deploy job for the target, which holds that server's private key,
+can decrypt it, and it keeps nothing. To rotate a secret, change it here and
+re-run **Publish image** for the `master` head. Until infra's contract enables
+delivery for `prism-hub`, nothing is delivered automatically.
 
 The registry pull uses infra's own short-lived workflow token: the `prism-hub`
 package grants `aiaiaiai-org/infra` **Read** (Package settings → Manage Actions

@@ -10,6 +10,8 @@ All notable changes to Prism Hub will be documented here.
   each Full CI-verified `master` head, and infra deploys it. `Deploy production`,
   `Deploy Prism PostgreSQL`, the infra recipient scripts and `INFRA_DEPLOY_TOKEN` are removed;
   runtime secrets stay in this repository's `production` Environment and never go to infra.
+- `Publish image` also seals the runtime secrets to the target server's public key and publishes
+  them as `ghcr.io/aiaiaiai-org/prism-hub:<sha>.secrets`, attested like the image.
 - Delivery presentation now runs at dispatch instead of enqueue. The outbox holds a
   `prism-hub.delivery-request.v1` envelope and Porter is invoked once a surface is
   resolved, so the message split follows the target that receives it.

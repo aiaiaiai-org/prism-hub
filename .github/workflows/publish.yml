@@ -1,8 +1,9 @@
 # © 2026 aiaiaiai · aiaiaiai.org
 
-# Publishes each master head that Full CI verified and attests its provenance.
-# aiaiaiai-org/infra finds, verifies and deploys it on its own (infra
-# docs/automatic-delivery.md), so this repository holds no credential for infra.
+# Publishes each master head that Full CI verified and attests its provenance, together with
+# its runtime secrets sealed to the target server's public key. aiaiaiai-org/infra finds,
+# verifies and deploys both on its own (infra docs/automatic-delivery.md). This repository holds
+# no credential for infra, and infra never stores a Prism secret.
 name: Publish image
 
 on:
@@ -28,6 +29,8 @@ jobs:
     if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'master' && github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    # The runtime secrets live here and leave only encrypted, in the envelope below.
+    environment: production
 
     steps:
       - name: Check out source
@@ -96,14 +99,90 @@ jobs:
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
 
+      - name: Resolve the target's recipient and secret names from infra
+        if: steps.source.outputs.current == 'true'
+        id: target
+        run: |
+          set -Eeuo pipefail
+          # infra is public; its reviewed contracts name the target, its public key and the
+          # secret names the workload may receive. No credential is involved.
+          git clone --quiet --depth 1 https://github.com/aiaiaiai-org/infra.git "$RUNNER_TEMP/infra"
+          ruby -ryaml - "$RUNNER_TEMP/infra" >> "$GITHUB_OUTPUT" <<'RUBY'
+          root = ARGV.fetch(0)
+          load = ->(path) { YAML.safe_load(File.read(path), aliases: false) }
+          servers = Dir["#{root}/contracts/servers/*.yaml"].map(&load).select { |s| Array(s.dig("spec", "workloads")).include?("prism-hub") }
+          abort "prism-hub must be placed on exactly one server" unless servers.length == 1
+          recipient = servers.first.dig("spec", "encryptionRecipient").to_s
+          abort "#{servers.first.dig('metadata', 'name')} publishes no encryptionRecipient" unless recipient.match?(%r{\Assh-ed25519 [A-Za-z0-9+/]{68}\z})
+          names = Array(load.("#{root}/contracts/services/prism-hub.yaml").dig("spec", "runtime", "secrets")).map { |m| m.split("=", 2).fetch(1) }
+          abort "the prism-hub contract names no secrets" if names.empty?
+          puts "server=#{servers.first.dig('metadata', 'name')}"
+          puts "recipient=#{recipient}"
+          puts "names=#{names.sort.join(' ')}"
+          RUBY
+
+      - name: Seal runtime secrets for the target
+        if: steps.source.outputs.current == 'true'
+        env:
+          RECIPIENT: ${{ steps.target.outputs.recipient }}
+          NAMES: ${{ steps.target.outputs.names }}
+          PRISM_POSTGRES_PASSWORD: ${{ secrets.PRISM_POSTGRES_PASSWORD }}
+          PRISM_HUB_SECRET_KEY_BASE: ${{ secrets.PRISM_HUB_SECRET_KEY_BASE }}
+          PRISM_BOT_DELIVERY_SECRET: ${{ secrets.PRISM_BOT_DELIVERY_SECRET }}
+        run: |
+          set -Eeuo pipefail
+          # Exactly the names infra's contract maps, or infra rejects the envelope.
+          provided="PRISM_BOT_DELIVERY_SECRET PRISM_HUB_SECRET_KEY_BASE PRISM_POSTGRES_PASSWORD"
+          if [[ "$NAMES" != "$provided" ]]; then
+            echo "::error::infra's prism-hub contract names [$NAMES]; this workflow seals [$provided]" >&2
+            exit 1
+          fi
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq age
+          umask 077
+          install -d "$RUNNER_TEMP/envelope"
+          trap 'rm -f "$RUNNER_TEMP/secrets.env"' EXIT
+          for name in $provided; do
+            value="${!name:-}"
+            test -n "$value" || { echo "::error::Missing production secret $name" >&2; exit 1; }
+            [[ "$value" != *$'\n'* && "$value" != *$'\r'* ]] || { echo "::error::$name spans lines" >&2; exit 1; }
+            printf '%s=%s\n' "$name" "$value"
+          done > "$RUNNER_TEMP/secrets.env"
+          age --recipient "$RECIPIENT" --output "$RUNNER_TEMP/envelope/secrets.age" "$RUNNER_TEMP/secrets.env"
+          test -s "$RUNNER_TEMP/envelope/secrets.age"
+          printf 'FROM scratch\nCOPY secrets.age /secrets.age\n' > "$RUNNER_TEMP/envelope/Dockerfile"
+
+      - name: Publish the secret envelope
+        if: steps.source.outputs.current == 'true'
+        id: envelope
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ runner.temp }}/envelope
+          push: true
+          # Infra looks for exactly <image>:<commit>.secrets and verifies it like the image.
+          tags: ghcr.io/${{ github.repository }}:${{ steps.source.outputs.sha }}.secrets
+          provenance: false
+          sbom: false
+
+      - name: Attest the secret envelope
+        if: steps.source.outputs.current == 'true'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ghcr.io/${{ github.repository }}
+          subject-digest: ${{ steps.envelope.outputs.digest }}
+          push-to-registry: true
+
       - name: Publish summary
         if: steps.source.outputs.current == 'true'
         env:
           RELEASE_SHA: ${{ steps.source.outputs.sha }}
           DIGEST: ${{ steps.build.outputs.digest }}
+          ENVELOPE: ${{ steps.envelope.outputs.digest }}
+          SERVER: ${{ steps.target.outputs.server }}
         run: |
           {
             echo "image=ghcr.io/$GITHUB_REPOSITORY:$RELEASE_SHA"
             echo "digest=$DIGEST"
+            echo "secrets=ghcr.io/$GITHUB_REPOSITORY:$RELEASE_SHA.secrets ($ENVELOPE), sealed for $SERVER"
             echo 'delivery: aiaiaiai-org/infra Reconcile deliveries picks this up'
           } >> "$GITHUB_STEP_SUMMARY"
