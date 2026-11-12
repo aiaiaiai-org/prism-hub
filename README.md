@@ -52,8 +52,7 @@ Scoped client credentials are the primary authentication path. The legacy
 `PRISM_HUB_API_TOKEN` is read only when
 `PRISM_HUB_LEGACY_TOKEN_ENABLED=true`; otherwise Hub does not require it.
 Family products (`docs/hub-protocol.md`) may instead present an AIS product
-token once `PRISM_HUB_AIS_ISSUER` (for example `https://auth.aiaiaiai.org`) is
-set; `PRISM_HUB_AIS_AUDIENCE` defaults to `prism-hub`.
+token; it needs no setting here (see `docs/architecture.md`).
 `PRISM_HUB_CHANNELS_JSON` is an array of configured channels:
 
 ```json

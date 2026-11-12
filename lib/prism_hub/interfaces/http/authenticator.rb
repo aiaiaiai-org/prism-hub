@@ -26,7 +26,10 @@ module PrismHub
           return nil unless match
 
           token = match[1]
-          return product_context_for(token) if @product_token_verifier && JWT_SHAPE.match?(token)
+          if @product_token_verifier && JWT_SHAPE.match?(token)
+            product_context = product_context_for(token)
+            return product_context if product_context
+          end
 
           context = @credential_repository.authenticate(token: token, now: @clock.call)
           return context if context

@@ -90,8 +90,22 @@ class HttpAuthenticatorTest < Minitest::Test
 
     assert_same product_context, authenticator.authenticate(request_with("header.payload.signature"))
     assert_nil authenticator.authenticate(request_with("header.payload.forged"))
-    assert_nil repository.last_authentication
     refute_nil authenticator.authenticate(request_with(TOKEN))
+  end
+
+  def test_a_token_ais_does_not_vouch_for_falls_through_to_the_other_credentials
+    legacy_context = context_for(["personal-threads"])
+    dotted_legacy_token = "legacy.token.that-is-longer-than-thirty-two-characters"
+    authenticator = PrismHub::Interfaces::Http::Authenticator.new(
+      credential_repository: FakeCredentialRepository.new(token: TOKEN, context: context_for([])),
+      clock: -> { NOW },
+      legacy_token: dotted_legacy_token,
+      legacy_context: legacy_context,
+      product_token_verifier: FakeProductTokenVerifier.new,
+      principal_repository: FakePrincipalRepository.new(context_for([]))
+    )
+
+    assert_same legacy_context, authenticator.authenticate(request_with(dotted_legacy_token))
   end
 
   def test_a_jwt_is_not_a_credential_while_product_tokens_are_off

@@ -69,19 +69,23 @@ constructs an explicit migration context with all currently configured channels
 and capabilities. Merely setting `PRISM_HUB_API_TOKEN` does not activate it.
 
 A family product (`hub.v1`, [hub protocol](hub-protocol.md)) authenticates
-with a product token from AIS instead of a Hub credential. It is on only when
-`PRISM_HUB_AIS_ISSUER` names AIS's https origin. The bearer is then an `at+jwt`
-EdDSA JWT; `AisProductTokenVerifier` checks it against AIS's published JWKS
-(`HttpAisKeySource`: cached five minutes, refreshed for an unknown key id at
-most once a minute, last known keys kept while AIS is unreachable) and
-requires `iss` = AIS, `aud` = `PRISM_HUB_AIS_AUDIENCE` (default `prism-hub`),
-an unexpired `exp`, the `hub.call` scope and no `act` claim: only Hub itself
-asks AIS for relayed tokens. The token's `sub`, the product's AIS client id,
-resolves to the active `ServicePrincipal` provisioned with that
-`ais_client_id`; Hub's own capability and channel grants for that principal
-form the `AuthorisationContext`. AIS says who the product is; Hub decides what
-it may do. A principal without an `ais_client_id` is never reached this way,
-and one product binds at most one principal.
+with a product token from AIS instead of a Hub credential. This needs no
+setting: AIS's address (`Bootstrap::AIS_ISSUER`) and Hub's audience
+(`prism-hub`) are constants, a fact of the family rather than of a deployment.
+A bearer that looks like a JWT is first offered to `AisProductTokenVerifier`;
+if AIS does not vouch for it, it falls through to the scoped credentials and
+the legacy bridge exactly as before. The verifier checks the token against
+AIS's published JWKS (`HttpAisKeySource`: fetched only when such a bearer
+arrives, cached five minutes, refreshed for an unknown key id at most once a
+minute, last known keys kept while AIS is unreachable) and requires `iss` =
+AIS, `aud` = `prism-hub`, an unexpired `exp`, the `hub.call` scope and no
+`act` claim: only Hub itself asks AIS for relayed tokens. The token's `sub`,
+the product's AIS client id, resolves to the active `ServicePrincipal`
+provisioned with that `ais_client_id`; Hub's own capability and channel grants
+for that principal form the `AuthorisationContext`. AIS says who the product
+is; Hub decides what it may do. The binding in the database is the switch: a
+principal without an `ais_client_id` is never reached this way, and one product
+binds at most one principal.
 
 ## Publication flow
 
