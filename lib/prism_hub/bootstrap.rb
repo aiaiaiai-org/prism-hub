@@ -49,7 +49,8 @@ module PrismHub
         authenticator = Interfaces::Http::Authenticator.new(
           credential_repository: credential_repository,
           clock: clock,
-          **legacy_authentication(env, channels)
+          **legacy_authentication(env, channels),
+          **product_authentication(env, logger)
         )
 
         Interfaces::Http::App.new(
@@ -117,6 +118,35 @@ module PrismHub
           subscription: subscription,
           operation: operation,
           request_body: request_body
+        )
+      end
+
+      # hub.v1: family products authenticate with AIS product tokens. Off unless AIS's issuer is
+      # configured; the scoped prism_client_v1 credentials keep working either way.
+      def product_authentication(env, logger)
+        issuer = env.fetch("PRISM_HUB_AIS_ISSUER", "").strip
+        return {} if issuer.empty?
+
+        uri = URI(issuer)
+        unless uri.is_a?(URI::HTTPS) && uri.host && [nil, "", "/"].include?(uri.path) && uri.query.nil?
+          raise ConfigurationError.new(
+            "hub.configuration.ais_issuer_invalid",
+            "PRISM_HUB_AIS_ISSUER must be an https origin"
+          )
+        end
+        issuer = issuer.delete_suffix("/")
+        {
+          product_token_verifier: Adapters::AisProductTokenVerifier.new(
+            issuer: issuer,
+            audience: env.fetch("PRISM_HUB_AIS_AUDIENCE", "prism-hub"),
+            key_source: Adapters::HttpAisKeySource.new(issuer: issuer, logger: logger)
+          ),
+          principal_repository: Adapters::ActiveRecordServicePrincipalRepository.new
+        }
+      rescue URI::InvalidURIError
+        raise ConfigurationError.new(
+          "hub.configuration.ais_issuer_invalid",
+          "PRISM_HUB_AIS_ISSUER must be an https origin"
         )
       end
 
