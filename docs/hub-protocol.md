@@ -215,7 +215,7 @@ the ordering Telegram account is still bound to the paying Bond
    issuer `0x1`, the page to return to) and the claims granted for this visit.
 3. Market answers with its catalog for that context: categories, SKUs, prices.
 4. A purchase is an order like any other. The return to the game is confirmed
-   by the order's state in the hub, not by the navigation (exists today as
+   by an authenticated order-state response from its owning seller/issuer via Hub, not by navigation (exists today as
    `market_return_confirmed`).
 
 ### Claims in `hub.v1`
@@ -267,10 +267,12 @@ fulfilled → refunded   (only before activation, see below)
 For `seeds` the order goes straight from `pending` to `processing`: payment
 and fulfilment are the same transaction in 0x1.
 
-The issuer **pulls** its orders from the hub, re-checks everything under its
-own lock, commits keyed by the order id, and reports. A crash after the commit
-only repeats `fulfilled`. This is what `nilx-one/core` `market_issuer` does
-today against Market; with the hub it pulls from one queue for every seller.
+The issuer **retrieves** orders from the seller's durable outbox through Hub,
+re-checks everything under its own lock, commits keyed by the order id, and
+reports via Hub. A crash after the commit only repeats `fulfilled`.
+The seller retains the replayable order until acknowledged; Hub holds no
+order queue or payload. Existing `nilx-one/core` `market_issuer` currently
+pulls from Market directly and must migrate to Hub-routed retrieval.
 
 Rejections are one closed list: `invalid_terms`, `recipient_unknown`,
 `recipient_expired`, `recipient_mismatch`, `insufficient_funds`,
@@ -312,7 +314,7 @@ clock.
   App Store asks for consumption information about a refund request, the
   selling product answers that the content was delivered and used, with the
   activation time. Google Play has no such step. If a store refunds anyway,
-  the hub records `order.refunded` with `after_activation: true` and the
+  the seller records `order.refunded` with `after_activation: true` and relays it through Hub and the
   issuer **removes the status** that order gave: for Special, its remaining
   Special time is set to zero and the entitlement becomes `revoked`. Exclusive
   and anything not bought by that order stay as they are. Nothing else
@@ -336,12 +338,14 @@ sequenceDiagram
     M->>H: order.create (seller 0xda-market, issuer 0x1, method seeds)
     H->>A: pass for aud=0x1, purpose=order:<id>
     A-->>H: pass
-    H->>H: order pending
-    X->>H: order.claim (issuer 0x1)
+    H-->>M: routed order receipt (seller persists pending)
+    X->>H: order.claim (issuer 0x1, seller 0xda-market)
+    H->>M: retrieve pending order
+    M-->>H: order + pass
     H-->>X: order + pass
     X->>X: verify pass · lock wallet · special_purchase_open · debit · issue item (one transaction, key = order id)
     X->>H: order.report fulfilled
-    H-)M: event order.fulfilled
+    H-)M: relay event order.fulfilled
     M-->>P: "оплачено, предмет чекає у грі"
     H-)P: Telegram (Porter): Special прибув, забери на точці маркету
     P->>X: in the game: collect → carry → activate
@@ -355,8 +359,8 @@ verifies the App Store transaction.
 
 ## Events
 
-Every product publishes events to the hub; the hub delivers them to
-subscribers. One envelope:
+Every product publishes events to the hub; the hub transiently relays them to
+subscribers. The publisher retains the durable outbox. One envelope:
 
 ```json
 {
@@ -420,10 +424,10 @@ To build, each its own pull request:
    `resolve` with Telegram evidence, the identity outbox; the 0x1 client id
    becomes `0x1` (it is not deployed and its users are wiped, so renaming now
    changes no live `sub`).
-3. **nilx-one/core**: claims; pull orders from the hub; accept a pass as the
+3. **nilx-one/core**: claims; retrieve seller-owned orders through the hub; accept a pass as the
    recipient; revoke before activation and refuse after it; App Store and Play verification for in-app purchases; events.
 4. **0xda-market**: sign in through AIS; resolve and ask through the hub;
-   place orders in the hub.
+   submit orders through the hub while persisting its own seller order state.
 5. **prism**: `docs/ecosystem.md` names the hub's family role.
 6. **infra**: product keys in host-owned secrets; then the HMAC handoff is
    retired.
