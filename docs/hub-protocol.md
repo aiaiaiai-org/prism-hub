@@ -29,10 +29,14 @@ Owner decision, 2026-11-12:
    order is final ([refunds](#refunds)).
 7. **A store refund after activation removes the status, nothing more**
    (2026-11-12). No ban, no account penalty.
-8. **AIS owns who a person is across the family, and answers for it**
-   (2026-11-12). Asked by 0xda-market, AIS itself says "yes, this person is
-   this Bond, with this Seed ₴€£ wallet": one question, one answer, no second
-   hop to 0x1 ([the family profile](#the-family-profile)).
+8. **AIS links a person's accounts across the family; the products then talk
+   to each other** (2026-11-12). Asked by 0xda-market, AIS says which Bond of
+   the 0x1 universe this person is. From then on Market needs no AIS for that
+   person: it addresses 0x1 by that Bond, and Prism Hub routes the requests
+   between the two ([the family link](#the-family-link)).
+9. **Seeds live only in 0x1** (2026-11-12). Seed ₴€£ is 0x1's in-game
+   currency. Nobody else holds a balance or a copy of one; 0xda-market uses
+   seeds only to sell Special and other 0x1 products, and asks 0x1 itself.
 
 ## Relay-first topology (owner decision, 2026-11-12)
 
@@ -109,15 +113,15 @@ subject translation, identity events) goes through Hub like any other call.
 
 | Who          | Owns                                                                                       | Never owns                  |
 | ------------ | ------------------------------------------------------------------------------------------ | --------------------------- |
-| AIS          | people, `pub_dress`, password, sessions, provider bindings (Telegram, …), pairwise `sub`, tokens for people and products, person passes, **the family profile**: which account a person holds in each product (their Bond, their Seed wallet) | debits and credits, items, game state |
+| AIS          | people, `pub_dress`, password, sessions, provider bindings (Telegram, …), pairwise `sub`, tokens for people and products, person passes, **the family link**: which account a person holds in each product (their Bond in 0x1) | seeds, balances, items, game state |
 | Prism Hub    | the product registry and its grants, routing of requests, order routing and correlation metadata, transient event fan-out, telling people (Porter → Telegram and other channels) | balances, debits, catalogs, game state |
-| 0x1          | the Bond's game state, the Avaia, the **Seed ₴€£ ledger** (every debit and credit), inventory, the subscription clock, what a paid thing becomes in the game | prices, offers, checkout; who the person is elsewhere |
+| 0x1          | the Bond, the Avaia, the **Seed ₴€£ wallet** (the only one), inventory, the subscription clock, what a paid thing becomes in the game | prices, offers, checkout; who the person is elsewhere |
 | 0xda-market  | catalog, categories, SKUs, prices, quotes, its checkout and payment providers             | balances it does not issue  |
 | App stores   | the in-app payment and its signed transaction (reached through the product whose app sold) | everything else             |
 
 A currency belongs to the product that issues it. Seeds are issued by 0x1, so
-only 0x1 debits or credits them. AIS knows *that* a person has a Seed wallet
-and what it last held; it never moves a seed.
+only 0x1 holds, debits or credits them. No other product keeps a balance or a
+copy of one.
 
 ## The rules
 
@@ -132,9 +136,9 @@ and what it last held; it never moves a seed.
 4. **Navigation is never proof.** A browser coming back with an order id
    proves nothing; only an authenticated answer from the owner does.
 5. **Pairwise subjects.** Each product knows a person only by its own `sub`.
-   Only AIS can say that two products' `sub`s are the same person: for one
-   operation (the person pass), or by answering from the family profile to a
-   product whose grant allows it.
+   Only AIS can say that two products' accounts are the same person: once,
+   through the family link (after which the two products use the linked
+   account), or for one operation (the person pass).
 6. **Proof the person is here.** Nobody asks about a person by a bare
    identifier (a Telegram id, a `pub_dress`). Otherwise any product could ask
    "is Telegram 123 a person, a player, how rich" about everybody.
@@ -173,7 +177,7 @@ A product's entry in the hub:
   "events_uri": "https://0xda-market.nilx.one/hub/events",
   "issues": [],
   "takes_money": ["market_psp"],
-  "may_ask": { "0x1": ["player", "wallet.balance", "subscription"] },
+  "may_ask": { "ais": ["link"], "0x1": ["wallet.balance", "subscription"] },
   "may_order_from": ["0x1"],
   "subscribes": ["identity.*", "order.*", "entitlement.*"]
 }
@@ -188,6 +192,11 @@ A product's entry in the hub:
 Nothing listed, nothing allowed. A new product is one entry.
 
 ## The person pass
+
+Where two products hold a [family link](#the-family-link) for a person, as
+0xda-market and 0x1 do through the Bond, they use the linked account and need
+no pass. The pass is for a one-off operation between products that keep no
+link for that person.
 
 What it is, plainly: when 0xda-market has to tell 0x1 *who* is buying, it
 cannot say "0x1's user N", because Market only knows its own name for the
@@ -216,43 +225,29 @@ nothing was debited, and a new attempt is a new order with a new confirmation.
 A repeat *after* the commit needs no valid pass: the issuer answers from its
 own receipt by the order id.
 
-## The family profile
+## The family link
 
-AIS keeps, for each person, the accounts they hold in the family's products.
-It is the owner of this record and the one that answers for it.
+AIS keeps, for each person, which account they hold in each product of the
+family. For 0x1 that account is the Bond. AIS keeps the link and nothing about
+the account itself: no balance, no subscription, no game state.
+
+- **0x1 reports the link** (`accounts.put`, through Hub) when a Bond is
+  created or attached to an AIS identity (`nilx-one/core#116`): "my `sub` X is
+  Bond B". `B` is 0x1's stable Bond reference, not the `pub_dress`, which a
+  rename can move. Only 0x1 may write a 0x1 link.
+- **Market asks AIS once** (`people.link`, through Hub) with proof the person
+  is here: fresh signed Telegram evidence, or its own `sub` from a sign-in
+  through AIS. AIS answers `unknown`, or the Bond reference with its current
+  `pub_dress`, if the registry lets Market see 0x1 links (`may_ask`).
+- **From then on Market talks to 0x1, not to AIS.** It keeps the Bond
+  reference with its own account for that person and names the Bond in every
+  request to 0x1: the wallet's balance, the subscription, an order's
+  recipient. Hub routes each request and checks Market's grant for it; 0x1
+  answers from its own wallet and state.
 
 ```json
-{
-  "sub": "<the asker's own pairwise sub for this person>",
-  "pub_dress": "0x0sky",
-  "accounts": {
-    "0x1": {
-      "bond": "0x0sky",
-      "wallet": { "denomination": "seeds", "balance": "12400", "as_of": "2026-11-12T07:00:00Z" },
-      "subscription": { "tier": "special", "until": "2027-02-12T07:00:00Z" }
-    }
-  }
-}
+{ "sub": "<Market's own pairwise sub>", "accounts": { "0x1": { "bond": "<Bond ref>", "pub_dress": "0x0sky" } } }
 ```
-
-- **A product reports its accounts to AIS** (`accounts.put`, through Hub):
-  0x1 says "this `sub` of mine is this Bond" when a Bond is created or attached
-  to an AIS identity (`nilx-one/core#116`), and reports the wallet and
-  subscription whenever they change, from its own outbox. AIS stores what the
-  product said, with its time. Only the product whose account it is may write
-  it, and it names the person by its own `sub`.
-- **A product asks AIS** (`people.profile`, through Hub) with proof the person
-  is here: its own `sub` from a sign-in, or fresh signed provider evidence.
-  AIS answers with the accounts the registry lets that asker see
-  (`may_ask`), or `unknown`.
-- **What stays in 0x1:** the ledger. `balance` in the profile is what 0x1
-  last reported, with `as_of`; it is for showing prices and offers, not for
-  deciding a payment. A purchase is still an order 0x1 commits itself, under
-  its own lock, against its own ledger; if the profile's balance was stale,
-  the order ends as `insufficient_funds` and nothing is debited.
-- **Why the Bond is no secret here:** `pub_dress` is the person's public
-  address, and Market already receives it today as the order's recipient.
-  The profile gives it only to a product the registry allows.
 
 ## Asking about a person
 
@@ -268,17 +263,21 @@ sequenceDiagram
     participant X as 0x1
 
     P->>M: opens the Market Mini App
-    X-)H: accounts.put (earlier, from 0x1's outbox: Bond, wallet, subscription)
+    X-)H: accounts.put (earlier, from 0x1's outbox: sub X is Bond B)
     H-)A: relay
-    M->>H: people.profile · evidence: signed Telegram initData
-    H->>H: grant check (may_ask)
+    M->>H: people.link · evidence: signed Telegram initData
     H->>A: relay (verify signature + freshness, find the Telegram binding)
-    A-->>H: unknown | { sub, pub_dress, accounts: { 0x1: { bond, wallet, subscription } } }
+    A-->>H: unknown | { sub, accounts: { 0x1: { bond: B, pub_dress } } }
+    H-->>M: the same (Market keeps Bond B with its own account)
+    M->>H: 0x1 wallet.balance · bond B
+    H->>H: grant check (may_ask)
+    H->>X: relay
+    X-->>H: { denomination: seeds, balance, as_of }
     H-->>M: the same
 ```
 
-Market asks once and AIS answers. A pass is needed only when Market then
-places an order, to name the recipient to 0x1.
+Market asks AIS once per person. Every later request names Bond B and goes to
+0x1 through Hub.
 
 - Evidence is Telegram's signed `initData` or a Telegram login payload, never
   an id. AIS checks it with Telegram's third-party validation (Telegram's
@@ -287,9 +286,9 @@ places an order, to name the recipient to 0x1.
   documentation before it is built.
 - `unknown` means no aiaiaiai identity holds this Telegram account. Market can
   send the person to AIS to sign in or create one.
-- **The wallet is read, never handed over.** The profile's balance is a
+- **The wallet is read, never handed over.** 0x1's balance answer is a
   snapshot for drawing prices. Seeds are spent only by an order 0x1 commits
-  itself.
+  itself, for Bond B.
 
 Exists in part: Market already takes orders in Telegram, and 0x1 checks that
 the ordering Telegram account is still bound to the paying Bond
@@ -308,17 +307,11 @@ the ordering Telegram account is still bound to the paying Bond
 
 ### Claims in `hub.v1`
 
-AIS answers the first three from the family profile; `Reported by` is the
-product that keeps them current.
-
-| Claim            | Answered by | Reported by | Answer                              |
-| ---------------- | ----------- | ----------- | ----------------------------------- |
-| `player`         | AIS         | 0x1         | the Bond's `pub_dress`, or absent   |
-| `wallet.balance` | AIS         | 0x1         | `{ denomination, balance, as_of }`  |
-| `subscription`   | AIS         | 0x1         | `{ tier, until }` as last reported  |
-
 | Claim            | Owner  | Answer                                   | Fresh for            |
 | ---------------- | ------ | ---------------------------------------- | -------------------- |
+| `link`           | AIS    | the Bond reference and its `pub_dress`, or `unknown` | until 0x1 reports a change |
+| `wallet.balance` | 0x1    | `{ denomination, balance, as_of }` for a Bond | a minute        |
+| `subscription`   | 0x1    | Core's `subscription_status` result for a Bond | its `valid_until_ms` |
 | `catalog`        | Market | categories and SKUs for a context        | Market's cache       |
 | `identity.providers` | AIS | names and status of the person's bound providers the asker may see; never credentials or tokens | the request |
 
@@ -339,7 +332,7 @@ The hub relays every cross-product order; the seller/issuer persist their own or
   "term": { "months": 3, "policy": "calendar_months_utc" },
   "price": { "price_id": 7, "amount_minor": 1920 },
   "payment": { "method": "seeds" },
-  "recipient": { "pass": "<pass for aud=0x1>" },
+  "recipient": { "bond": "<Bond ref from the family link>" },
   "status": "pending"
 }
 ```
@@ -426,20 +419,16 @@ sequenceDiagram
     actor P as Person
     participant M as 0xda-market
     participant H as Prism Hub
-    participant A as AIS
     participant X as 0x1
 
+    Note over M: Market already knows this person's Bond B (the family link)
     P->>M: Special · 3 months · pay in Seed ₴€£ · confirm
-    M->>H: people.pass (Market's sub, aud=0x1, purpose=order:<id>)
-    H->>A: relay
-    A-->>H: pass
-    H-->>M: pass
-    M->>M: order pending, stored with the pass (Market's own database)
+    M->>M: order pending, recipient Bond B (Market's own database)
     X->>H: orders.claim (issuer 0x1, seller 0xda-market)
     H->>M: relay
-    M-->>H: order + pass
-    H-->>X: order + pass
-    X->>X: verify pass · lock wallet · special_purchase_open · debit · issue item (one transaction, key = order id)
+    M-->>H: order (recipient Bond B)
+    H-->>X: order
+    X->>X: lock Bond B's wallet · special_purchase_open · debit · issue item (one transaction, key = order id)
     X->>H: orders.report fulfilled
     H->>M: relay
     M->>M: order fulfilled
@@ -523,16 +512,17 @@ principals, capability grants and Porter delivery (this repository).
 To build, each its own pull request:
 
 1. **prism-hub**: products in the registry, AIS token verification,
-   `people.resolve` / `people.claims` / `people.pass` routing, order relay
+   `people.link` and 0x1 claim routing, order relay
    and correlation, transient event fan-out with source-owned outboxes, Porter
    routes for `order.*` and `entitlement.*` that deliver in flight.
 2. **4x-ais**: `client_credentials` with `private_key_jwt`, person passes,
-   the family profile (`accounts.put`, `people.profile`), Telegram
+   the family link (`accounts.put`, `people.link`), Telegram
    bindings and evidence, the identity outbox; `identity.providers`; the 0x1 client id becomes `0x1` before AIS goes live
    and before the legacy Bond migration (`nilx-one/core#116`) is activated,
    because that migration stores the pairwise `sub`, which depends on the
    client id.
-3. **nilx-one/core**: report the Bond, wallet and subscription to AIS; retrieve seller-owned orders through the hub; accept a pass as the
+3. **nilx-one/core**: report the Bond link to AIS; answer `wallet.balance`
+   and `subscription` for a Bond through the hub; retrieve seller-owned orders through the hub; accept a pass as the
    recipient; revoke before activation and refuse after it; App Store and Play verification for in-app purchases; events.
 4. **0xda-market**: sign in through AIS; resolve and ask through the hub;
    keep its own orders with their passes; serve `orders.claim` and take
@@ -545,9 +535,5 @@ To build, each its own pull request:
 
 1. Whether the registry is edited by hand (configuration) or by an operator
    API in the hub.
-2. The balance in the family profile is a copy 0x1 reports, and the ledger
-   stays in 0x1 so that a debit and its grant remain one transaction. The
-   alternative, moving the Seed ledger itself into AIS, would break that
-   transaction and is not proposed; the owner confirms.
 
 <!-- © 2026 aiaiaiai · aiaiaiai.org -->
