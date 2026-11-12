@@ -14,7 +14,8 @@ Owner decisions, 2026-11-11:
 2. **Prism Hub is the family's relay, router and orchestrator.** Every
    cross-service request, response and event travels through Hub, including
    calls to AIS. A service knows Hub's address and the target's logical service
-   identifier, never the target's network location.
+   identifier, never the target's network location. The one exception is
+   [the front door](#the-front-door-sign-in-and-tokens): sign-in and tokens.
 3. The **person pass** (below) needs no consent screen: confirming the
    purchase is consent enough.
 4. **Many products take real money**, not only 0xda-market: App Store and
@@ -65,9 +66,40 @@ to every pair of services, including AIS-originated calls.
   purchase state, wallets, identities or other product facts. The owner of
   each domain fact persists and commits it.
 
-This decision supersedes earlier passages below that describe Hub-owned
-order storage, queues or payload outboxes. Those are design work to revise,
-not exceptions to non-retention.
+- **Porter:** telling a person is part of the same relay. Porter works on
+  the payload in flight and hands the message to the channel at once, as soon
+  as it has rendered it; the sender gets its acknowledgement only after the
+  channel accepted the message. Nothing of a `hub.v1` payload is written down
+  to wait. If the channel is unavailable, the sender gets a retryable failure
+  and its own outbox repeats the event; the event `id` is the idempotency key,
+  so a repeat never becomes a second message. Hub's existing
+  `delivery_outbox_entries` stores an `intent_payload`; `hub.v1` traffic does
+  not use it.
+
+The sections below follow this decision: no part of this document gives Hub
+an order store, a queue or a payload outbox.
+
+### The front door: sign-in and tokens
+
+Three things go straight to AIS at its public address,
+`https://auth.aiaiaiai.org`, and never through Hub:
+
+1. **The sign-in page.** The person's browser opens AIS itself: the address
+   bar shows the one place where the password is typed.
+2. **The sign-in's own back half:** discovery, the code exchange at `/token`,
+   and JWKS. OpenID Connect binds a token to the issuer's own address (`iss`),
+   and a client must fetch the keys from that address to trust the token.
+   This is the contract `nilx-one/core` `aiaiaiai_sign_in` already verifies;
+   it does not change.
+3. **Product tokens** (`client_credentials` at `/token`). A product needs the
+   token before it can speak to Hub at all, and Hub itself needs AIS's keys to
+   check it, so neither can depend on Hub.
+
+These are not service-to-service business calls: they are how anybody gets a
+credential in the first place. So a Hub outage never signs anybody out or
+blocks a sign-in; it only pauses what products ask of each other. Everything
+else AIS does for a product (`people.resolve`, passes, `identity.providers`,
+subject translation, identity events) goes through Hub like any other call.
 
 ## Who owns what
 
@@ -90,8 +122,8 @@ only 0x1 debits or credits them.
    the owner of the money. The hub never holds a balance, order payload or durable order state and never takes part
    in that transaction.
 3. **A hub outage delays, it never loses or doubles.** Requests carry an
-   idempotency key end to end (the order id). Events are kept in an outbox
-   until delivered. A repeat confirms the first result.
+   idempotency key end to end (the order id). Events stay in their sender's
+   outbox until the receiver acknowledged them; Hub keeps none. A repeat confirms the first result.
 4. **Navigation is never proof.** A browser coming back with an order id
    proves nothing; only an authenticated answer from the owner does.
 5. **Pairwise subjects.** Each product knows a person only by its own `sub`.
@@ -100,18 +132,19 @@ only 0x1 debits or credits them.
 6. **Proof the person is here.** Nobody asks about a person by a bare
    identifier (a Telegram id, a `pub_dress`). Otherwise any product could ask
    "is Telegram 123 a person, a player, how rich" about everybody.
-7. **No shared databases or cookies.** HTTPS through the hub, and events.
+7. **No shared databases or cookies.** HTTPS through the hub, and events;
+   sign-in and tokens directly at AIS.
 8. **`hub.v1` only grows.** A breaking change is `hub.v2`, run in parallel
    until every product has moved.
 
 ## Credentials
 
-- **People** sign in only through AIS: OIDC code + PKCE, pairwise `sub`, EdDSA
-  `id_token`. 0x1 does this today; 0xda-market and Prism follow (`cell` skin for
+- **People** sign in only through AIS, directly (the front door): OIDC code
+  + PKCE, pairwise `sub`, EdDSA `id_token`. 0x1 does this today; 0xda-market and Prism follow (`cell` skin for
   0x-products, `slug` for the rest).
 - **Products** prove who they are with an AIS token: `client_credentials`
   with `private_key_jwt` (each product signs with its own Ed25519 key; no shared
-  secrets), `aud=prism-hub`, `exp` ≤ 5 minutes.
+  secrets), `aud=prism-hub`, `exp` ≤ 5 minutes, asked of AIS directly.
 - **The hub** verifies the token, finds the product's `ServicePrincipal` and
   checks its grants (the capability-grant model Hub already has, extended
   from channels to products). It forwards a request with its own AIS token,
@@ -164,9 +197,17 @@ operation, this person is 0x1's `sub` X", sealed so that only 0x1 reads it.
 | `exp`     | 15 minutes                                               |
 | `jti`     | unique; accepted once                                    |
 
-Market cannot reuse it or read anything from it; the hub carries it but does
-not need it. It replaces `pub_dress` as the join key, which breaks on a rename
-or a prefix change.
+Market cannot reuse it or read anything from it. Hub carries it in flight
+and never keeps it; the product that asked keeps it with its own order. It
+replaces `pub_dress` as the join key, which breaks on a rename or a prefix
+change (and which `nilx-one/core#116` likewise refuses as proof of anything).
+
+The 15 minutes are the life of the order's authorization, the same window an
+order has today. If the issuer has not claimed the order by then (Market, Hub
+or the issuer was down too long), the order ends as `recipient_expired`:
+nothing was debited, and a new attempt is a new order with a new confirmation.
+A repeat *after* the commit needs no valid pass: the issuer answers from its
+own receipt by the order id.
 
 ## Asking about a person
 
@@ -185,8 +226,8 @@ sequenceDiagram
     M->>H: people.resolve · evidence: signed Telegram initData
     H->>A: resolve (verify signature + freshness, find the Telegram binding)
     A-->>H: unknown | Market's sub + pass for aud=0x1
-    H-->>M: unknown | Market's sub
-    M->>H: people.claims · want: player, wallet.balance, subscription
+    H-->>M: unknown | Market's sub + pass (Market keeps it, cannot read it)
+    M->>H: people.claims · pass · want: player, wallet.balance, subscription
     H->>H: grant check (may_ask)
     H->>X: claims · pass
     X-->>H: { player: true, wallet: { seeds: "12400", as_of }, subscription }
@@ -226,6 +267,7 @@ the ordering Telegram account is still bound to the paying Bond
 | `wallet.balance` | 0x1    | `{ denomination, amount, as_of }`        | a minute             |
 | `subscription`   | 0x1    | Core's `subscription_status` result      | its `valid_until_ms` |
 | `catalog`        | Market | categories and SKUs for a context        | Market's cache       |
+| `identity.providers` | AIS | names and status of the person's bound providers the asker may see; never credentials or tokens | the request |
 
 ## Orders: any seller, any payment, any issuer
 
@@ -308,8 +350,8 @@ clock.
   entitlement: the thing leaves the grid, and for `seeds` the seeds go back to
   the wallet. Both happen in one transaction keyed by the order id.
 - **After activation**: our own channels refuse. For `seeds` and `market_psp`
-  the seller does not offer a refund, and the hub rejects `order.refunded`
-  for an activated order with `already_activated`.
+  the seller does not offer a refund, and the issuer refuses a refund of an
+  activated order with `already_activated`.
 - **App stores decide refunds themselves**, and we cannot stop them. When the
   App Store asks for consumption information about a refund request, the
   selling product answers that the content was delivered and used, with the
@@ -335,27 +377,32 @@ sequenceDiagram
     participant X as 0x1
 
     P->>M: Special · 3 months · pay in Seed ₴€£ · confirm
-    M->>H: order.create (seller 0xda-market, issuer 0x1, method seeds)
-    H->>A: pass for aud=0x1, purpose=order:<id>
+    M->>H: people.pass (Market's sub, aud=0x1, purpose=order:<id>)
+    H->>A: relay
     A-->>H: pass
-    H-->>M: routed order receipt (seller persists pending)
-    X->>H: order.claim (issuer 0x1, seller 0xda-market)
-    H->>M: retrieve pending order
+    H-->>M: pass
+    M->>M: order pending, stored with the pass (Market's own database)
+    X->>H: orders.claim (issuer 0x1, seller 0xda-market)
+    H->>M: relay
     M-->>H: order + pass
     H-->>X: order + pass
     X->>X: verify pass · lock wallet · special_purchase_open · debit · issue item (one transaction, key = order id)
-    X->>H: order.report fulfilled
-    H-)M: relay event order.fulfilled
+    X->>H: orders.report fulfilled
+    H->>M: relay
+    M->>M: order fulfilled
     M-->>P: "оплачено, предмет чекає у грі"
-    H-)P: Telegram (Porter): Special прибув, забери на точці маркету
+    X-)H: event entitlement.issued (from 0x1's outbox)
+    H-)P: Porter, at once: Special прибув, забери на точці маркету
+    H--)X: delivered (0x1 clears the event from its outbox)
     P->>X: in the game: collect → carry → activate
     X->>X: SubscriptionClock grants 3 calendar months
     X-)H: event entitlement.state_changed (activated)
 ```
 
 The same order bought in the 0x1 iOS app differs only in `seller: "0x1"`,
-`payment.method: "app_store"`, and a `paid` step reported by 0x1 after it
-verifies the App Store transaction.
+`payment.method: "app_store"`, and a `paid` step 0x1 records itself after it
+verifies the App Store transaction. Seller and issuer are then the same
+product, and Hub only carries the events.
 
 ## Events
 
@@ -377,8 +424,13 @@ subscribers. The publisher retains the durable outbox. One envelope:
 The sender writes the event to its outbox in the same transaction as the
 change. Delivery is at least once, signed as a compact JWS with the sender's
 key (the hub with its own on fan-out); the receiver deduplicates by `id`. The
-hub translates `subject` to each receiver's pairwise `sub` through AIS; a
-receiver never sees another product's `sub`.
+sender clears an event from its outbox only when Hub has answered that every
+subscriber, Porter included, acknowledged it.
+
+`subject` is the one field Hub rewrites: for each receiver it asks AIS, as a
+caller of its own, for that receiver's pairwise `sub`, puts it in the envelope
+in flight, and keeps neither. It never opens or changes `data`. A receiver
+never sees another product's `sub`.
 
 | Type                         | Source  | Meaning                                    |
 | ---------------------------- | ------- | ------------------------------------------ |
@@ -386,8 +438,8 @@ receiver never sees another product's `sub`.
 | `identity.prefix_changed`    | AIS     | the public address moved; `sub` did not    |
 | `identity.deleted`           | AIS     | erase this `sub`'s data                    |
 | `order.paid`                 | seller  | payment confirmed (not for `seeds`)        |
-| `order.fulfilled`            | hub     | the issuer committed                       |
-| `order.rejected`             | hub     | final refusal, with the shared code        |
+| `order.fulfilled`            | issuer  | the issuer committed                       |
+| `order.rejected`             | issuer  | final refusal, with the shared code        |
 | `order.refunded`             | seller  | money went back                            |
 | `wallet.debited`             | 0x1     | seeds left a wallet, with the order id     |
 | `entitlement.issued`         | issuer  | the person owns a thing or a term          |
@@ -418,16 +470,19 @@ principals, capability grants and Porter delivery (this repository).
 To build, each its own pull request:
 
 1. **prism-hub**: products in the registry, AIS token verification,
-   `people.resolve` / `people.claims` routing, order relay and correlation, transient event fan-out with source-owned outboxes, Porter routes for `order.*` and
-   `entitlement.*`.
+   `people.resolve` / `people.claims` / `people.pass` routing, order relay
+   and correlation, transient event fan-out with source-owned outboxes, Porter
+   routes for `order.*` and `entitlement.*` that deliver in flight.
 2. **4x-ais**: `client_credentials` with `private_key_jwt`, person passes,
-   `resolve` with Telegram evidence, the identity outbox; the 0x1 client id
-   becomes `0x1` (it is not deployed and its users are wiped, so renaming now
-   changes no live `sub`).
+   `resolve` with Telegram evidence, the identity outbox; `identity.providers`; the 0x1 client id becomes `0x1` before AIS goes live
+   and before the legacy Bond migration (`nilx-one/core#116`) is activated,
+   because that migration stores the pairwise `sub`, which depends on the
+   client id.
 3. **nilx-one/core**: claims; retrieve seller-owned orders through the hub; accept a pass as the
    recipient; revoke before activation and refuse after it; App Store and Play verification for in-app purchases; events.
 4. **0xda-market**: sign in through AIS; resolve and ask through the hub;
-   submit orders through the hub while persisting its own seller order state.
+   keep its own orders with their passes; serve `orders.claim` and take
+   `orders.report` through the hub.
 5. **prism**: `docs/ecosystem.md` names the hub's family role.
 6. **infra**: product keys in host-owned secrets; then the HMAC handoff is
    retired.
