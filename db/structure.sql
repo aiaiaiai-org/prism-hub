@@ -287,6 +287,7 @@ CREATE TABLE public.service_principals (
     status character varying(32) DEFAULT 'active'::character varying NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
+    ais_client_id character varying(64),
     CONSTRAINT service_principals_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('disabled'::character varying)::text])))
 );
 
@@ -941,6 +942,13 @@ CREATE INDEX index_provider_identity_bindings_on_user_identity_id ON public.prov
 
 
 --
+-- Name: index_service_principals_on_ais_client_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_service_principals_on_ais_client_id ON public.service_principals USING btree (ais_client_id);
+
+
+--
 -- Name: index_service_principals_on_identifier; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1205,6 +1213,7 @@ ALTER TABLE ONLY public.social_account_accesses
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20261112070000'),
 ('20261028080000'),
 ('20261023070000'),
 ('20260930100000'),

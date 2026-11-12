@@ -62,6 +62,56 @@ class HttpAuthenticatorTest < Minitest::Test
     assert_same scoped_context, authenticator.authenticate(request_with(TOKEN))
   end
 
+  class FakeProductTokenVerifier < PrismHub::Ports::ProductTokenVerifier
+    def verify(token:, now:)
+      token == "header.payload.signature" ? "0xda-market" : nil
+    end
+  end
+
+  class FakePrincipalRepository < PrismHub::Ports::ServicePrincipalRepository
+    def initialize(context)
+      @context = context
+    end
+
+    def authorise_product(product_id:)
+      product_id == "0xda-market" ? @context : nil
+    end
+  end
+
+  def test_an_ais_product_token_resolves_to_the_products_hub_grants
+    product_context = context_for(["personal-threads"])
+    repository = FakeCredentialRepository.new(token: TOKEN, context: context_for([]))
+    authenticator = PrismHub::Interfaces::Http::Authenticator.new(
+      credential_repository: repository,
+      clock: -> { NOW },
+      product_token_verifier: FakeProductTokenVerifier.new,
+      principal_repository: FakePrincipalRepository.new(product_context)
+    )
+
+    assert_same product_context, authenticator.authenticate(request_with("header.payload.signature"))
+    assert_nil authenticator.authenticate(request_with("header.payload.forged"))
+    assert_nil repository.last_authentication
+    refute_nil authenticator.authenticate(request_with(TOKEN))
+  end
+
+  def test_a_jwt_is_not_a_credential_while_product_tokens_are_off
+    repository = FakeCredentialRepository.new(token: TOKEN, context: context_for([]))
+    authenticator = build_authenticator(repository)
+
+    assert_nil authenticator.authenticate(request_with("header.payload.signature"))
+  end
+
+  def test_product_authentication_needs_both_parts
+    error = assert_raises(PrismHub::ConfigurationError) do
+      PrismHub::Interfaces::Http::Authenticator.new(
+        credential_repository: FakeCredentialRepository.new(token: TOKEN, context: context_for([])),
+        clock: -> { NOW },
+        product_token_verifier: FakeProductTokenVerifier.new
+      )
+    end
+    assert_equal "hub.product_auth.incomplete", error.code
+  end
+
   private
 
   def build_authenticator(repository)

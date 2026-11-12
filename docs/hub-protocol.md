@@ -147,7 +147,8 @@ only 0x1 debits or credits them.
   secrets), `aud=prism-hub`, `exp` ≤ 5 minutes, asked of AIS directly.
 - **The hub** verifies the token, finds the product's `ServicePrincipal` and
   checks its grants (the capability-grant model Hub already has, extended
-  from channels to products). It forwards a request with its own AIS token,
+  from channels to products). Built: [architecture](architecture.md#client-identity-and-authorization),
+  with AIS's side in `aiaiaiai-org/4x-ais` `docs/runtime.md`. It forwards a request with its own AIS token,
   `aud=<target product>`, and an `act` claim naming the product that asked.
   The target trusts the hub and still knows who is asking.
 
