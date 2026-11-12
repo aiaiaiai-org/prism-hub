@@ -11,8 +11,10 @@ later. AIS (`aiaiaiai-org/4x-ais`) is the family's identity.
 Owner decisions, 2026-11-11:
 
 1. The protocol is **`hub.v1`**. "Family" is the name for the set of products.
-2. **Prism Hub orchestrates the family.** Every product-to-product request
-   and every event goes through it.
+2. **Prism Hub is the family's relay, router and orchestrator.** Every
+   cross-service request, response and event travels through Hub, including
+   calls to AIS. A service knows Hub's address and the target's logical service
+   identifier, never the target's network location.
 3. The **person pass** (below) needs no consent screen: confirming the
    purchase is consent enough.
 4. **Many products take real money**, not only 0xda-market: App Store and
@@ -27,12 +29,52 @@ Owner decision, 2026-11-12:
 7. **A store refund after activation removes the status, nothing more**
    (2026-11-12). No ban, no account penalty.
 
+## Relay-first topology (owner decision, 2026-11-12)
+
+**Prism Hub knows where services are, not what they own. Services know how to
+talk to Hub, not how to reach each other.**
+
+AIS, 0x1, 0xda-market, Prism and future services are peers on the transport.
+AIS is the authority for identities, not a gateway above Hub. For example,
+`0xda-market → Hub → AIS → Hub → 0xda-market` answers an authorized
+`identity.providers.list` query. The caller does not resolve AIS's endpoint,
+and AIS does not need to know the caller's endpoint. The same rule applies
+to every pair of services, including AIS-originated calls.
+
+- **Service registry:** Hub maps logical service IDs and operations to target
+  endpoints; only Hub owns and resolves these routes. Callers specify a
+  destination ID and operation, not an arbitrary URL (no open proxy).
+- **Request/response relay:** Hub authenticates the caller, checks an
+  operation- and target-specific grant, forwards the request with a verifiable
+  caller identity, and returns the target's response. Domain authorization
+  and domain decisions remain with the target owner.
+- **Payload non-retention:** Hub must not persist request bodies, responses,
+  person passes, provider evidence or event payloads in databases, queues,
+  logs, traces, dead-letter stores or backups. Payload may exist in bounded
+  process memory while in flight; erase references after completion.
+- **Metadata:** Hub may persist its registry, grants and minimal operational
+  correlation metadata (request ID, route, status, timing), never personal
+  or domain payload. Avoid person identifiers and secrets in metadata.
+- **Unavailable target:** return an explicit retryable failure. Durable
+  delivery requires a source-owned outbox and receiver-side deduplication;
+  Hub can retry while the sender retains the payload, or relay a reference
+  retrieved from the owner. Hub must not promise guaranteed delivery after
+  a crash if no owner retains a replayable event.
+- **Orchestration:** Hub may coordinate multi-step workflows using
+  non-sensitive correlation/state references, but cannot own order payloads,
+  purchase state, wallets, identities or other product facts. The owner of
+  each domain fact persists and commits it.
+
+This decision supersedes earlier passages below that describe Hub-owned
+order storage, queues or payload outboxes. Those are design work to revise,
+not exceptions to non-retention.
+
 ## Who owns what
 
 | Who          | Owns                                                                                       | Never owns                  |
 | ------------ | ------------------------------------------------------------------------------------------ | --------------------------- |
 | AIS          | people, `pub_dress`, password, sessions, provider bindings (Telegram, …), pairwise `sub`, tokens for people and products, person passes | money, items, product state |
-| Prism Hub    | the product registry and its grants, routing of requests, the life of every cross-product order, event fan-out, telling people (Porter → Telegram and other channels) | balances, debits, catalogs, game state |
+| Prism Hub    | the product registry and its grants, routing of requests, order routing and correlation metadata, transient event fan-out, telling people (Porter → Telegram and other channels) | balances, debits, catalogs, game state |
 | 0x1          | the Bond, the Avaia, the **Seed ₴€£ wallet**, inventory, the subscription clock, what a paid thing becomes in the game | prices, offers, checkout    |
 | 0xda-market  | catalog, categories, SKUs, prices, quotes, its checkout and payment providers             | balances it does not issue  |
 | App stores   | the in-app payment and its signed transaction (reached through the product whose app sold) | everything else             |
@@ -45,7 +87,7 @@ only 0x1 debits or credits them.
 1. **One fact, one owner.** Only the owner writes a fact; everyone else asks.
 2. **Hub orchestrates, the owner commits.** The hub decides what happens next
    and to whom; a debit and what it pays for are still one transaction inside
-   the owner of the money. The hub never holds a balance and never takes part
+   the owner of the money. The hub never holds a balance, order payload or durable order state and never takes part
    in that transaction.
 3. **A hub outage delays, it never loses or doubles.** Requests carry an
    idempotency key end to end (the order id). Events are kept in an outbox
@@ -187,7 +229,7 @@ the ordering Telegram account is still bound to the paying Bond
 
 ## Orders: any seller, any payment, any issuer
 
-The hub holds every cross-product order and its state. Three roles meet in it:
+The hub relays every cross-product order; the seller/issuer persist their own order facts and states. Hub may retain only non-sensitive correlation metadata. Three roles meet in it:
 
 - **seller**: who offered and priced it (Market, or a product's own app);
 - **payment**: how it is paid, and who vouches for that;
@@ -352,8 +394,8 @@ A product that does not know a type ignores it.
 
 ## What the hub must be, now that everything passes through it
 
-- **Highly available**, with its outbox and order store in PostgreSQL it
-  already runs; an outage pauses the family, it must not corrupt it (rule 3).
+- **Highly available**, without a payload outbox or order store; source-owned
+  outboxes and idempotent recipients permit retries after an outage.
 - **Stateless about money**: no balances, no prices, no catalog copies.
 - **Versioned on the wire**: `hub.v1` routes live in `openapi/` next to
   `prism-hub.v1.yaml`, checked by `script/check_contract`.
@@ -372,8 +414,7 @@ principals, capability grants and Porter delivery (this repository).
 To build, each its own pull request:
 
 1. **prism-hub**: products in the registry, AIS token verification,
-   `people.resolve` / `people.claims` routing, the order store and queue, the
-   event inbox, outbox and fan-out, Porter routes for `order.*` and
+   `people.resolve` / `people.claims` routing, order relay and correlation, transient event fan-out with source-owned outboxes, Porter routes for `order.*` and
    `entitlement.*`.
 2. **4x-ais**: `client_credentials` with `private_key_jwt`, person passes,
    `resolve` with Telegram evidence, the identity outbox; the 0x1 client id
