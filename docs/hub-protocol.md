@@ -24,6 +24,8 @@ Owner decision, 2026-11-12:
 
 6. **No refund after activation.** Once an entitlement is `activated`, the
    order is final ([refunds](#refunds)).
+7. **A store refund after activation removes the status, nothing more**
+   (2026-11-12). No ban, no account penalty.
 
 ## Who owns what
 
@@ -268,10 +270,11 @@ clock.
   App Store asks for consumption information about a refund request, the
   selling product answers that the content was delivered and used, with the
   activation time. Google Play has no such step. If a store refunds anyway,
-  the hub records `order.refunded` with `after_activation: true` and **nothing
-  is taken back in the game**. What else to do about repeated store refunds
-  (for example, not selling to that account in the app again) is a later
-  decision.
+  the hub records `order.refunded` with `after_activation: true` and the
+  issuer **removes the status** that order gave: for Special, its remaining
+  Special time is set to zero and the entitlement becomes `revoked`. Exclusive
+  and anything not bought by that order stay as they are. Nothing else
+  happens: no ban, no limit on buying again, however often it repeats.
 
 `core/docs/subscriptions.md` in `nilx-one/core` still calls early refunds an
 open authority decision; it takes this rule in its own change.
