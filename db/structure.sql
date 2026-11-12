@@ -334,7 +334,7 @@ CREATE TABLE public.signal_boards (
     position_reminded_at timestamp(6) without time zone,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
-    CONSTRAINT signal_boards_level_check CHECK (((level)::text = ANY ((ARRAY['quiet'::character varying, 'region'::character varying, 'here'::character varying])::text[])))
+    CONSTRAINT signal_boards_level_check CHECK (((level)::text = ANY (ARRAY[('quiet'::character varying)::text, ('region'::character varying)::text, ('here'::character varying)::text])))
 );
 
 
