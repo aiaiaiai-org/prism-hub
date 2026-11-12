@@ -106,7 +106,7 @@ Three things go straight to AIS at its public address,
 These are not service-to-service business calls: they are how anybody gets a
 credential in the first place. So a Hub outage never signs anybody out or
 blocks a sign-in; it only pauses what products ask of each other. Everything
-else AIS does for a product (`people.resolve`, passes, `identity.providers`,
+else AIS does for a product (`people.link`, `accounts.put`, passes, `identity.providers`,
 subject translation, identity events) goes through Hub like any other call.
 
 ## Who owns what
@@ -135,13 +135,17 @@ copy of one.
    outbox until the receiver acknowledged them; Hub keeps none. A repeat confirms the first result.
 4. **Navigation is never proof.** A browser coming back with an order id
    proves nothing; only an authenticated answer from the owner does.
-5. **Pairwise subjects.** Each product knows a person only by its own `sub`.
-   Only AIS can say that two products' accounts are the same person: once,
-   through the family link (after which the two products use the linked
-   account), or for one operation (the person pass).
+5. **Pairwise subjects.** Each product knows a person only by its own `sub`,
+   and no answer ever carries another product's `sub`. Only AIS can say that
+   two products' accounts are the same person: once, through the family link,
+   which names the account (the Bond) and never 0x1's `sub`; or for one
+   operation, through the person pass, which only its audience can read.
 6. **Proof the person is here.** Nobody asks about a person by a bare
    identifier (a Telegram id, a `pub_dress`). Otherwise any product could ask
-   "is Telegram 123 a person, a player, how rich" about everybody.
+   "is Telegram 123 a person, a player, how rich" about everybody. The one
+   standing identifier is a linked account (the Bond) that a product got from
+   AIS through `people.link`, which itself needed that proof
+   (decision 8).
 7. **No shared databases or cookies.** HTTPS through the hub, and events;
    sign-in and tokens directly at AIS.
 8. **`hub.v1` only grows.** A breaking change is `hub.v2`, run in parallel
@@ -178,6 +182,7 @@ A product's entry in the hub:
   "issues": [],
   "takes_money": ["market_psp"],
   "may_ask": { "ais": ["link"], "0x1": ["wallet.balance", "subscription"] },
+  "may_report": [],
   "may_order_from": ["0x1"],
   "subscribes": ["identity.*", "order.*", "entitlement.*"]
 }
@@ -186,10 +191,19 @@ A product's entry in the hub:
 - `issues`: currencies the product is authority for (`0x1`: `["seeds"]`).
 - `takes_money`: payment methods it may report as paid (`0x1`: `["app_store",
   "google_play"]`).
-- `may_ask`: which claims about a person it may ask of which product.
+- `may_ask`: which claims about a person it may ask of which product
+  (`ais: link` is `people.link`).
+- `may_report`: the products whose links it may write to AIS with
+  `accounts.put`: only its own (`0x1`: `["0x1"]`).
 - `may_order_from`: which issuers it may place orders with.
 
 Nothing listed, nothing allowed. A new product is one entry.
+
+Who enforces what: **Hub** checks the caller's grant for the operation and its
+target before it relays anything (`may_ask`, `may_report`, `may_order_from`);
+it never opens the payload to do so. **The target** then applies its own
+domain rules: AIS writes a link only for the product the caller is (the token's
+`sub` or `act.sub`), and 0x1 answers only for a Bond that exists.
 
 ## The person pass
 
@@ -234,11 +248,15 @@ the account itself: no balance, no subscription, no game state.
 - **0x1 reports the link** (`accounts.put`, through Hub) when a Bond is
   created or attached to an AIS identity (`nilx-one/core#116`): "my `sub` X is
   Bond B". `B` is 0x1's stable Bond reference, not the `pub_dress`, which a
-  rename can move. Only 0x1 may write a 0x1 link.
+  rename can move. Only 0x1 may write a 0x1 link. Each report carries the
+  `as_of` time 0x1 made it; AIS ignores a report older than the one it holds,
+  so an outbox replay never moves a link backward.
 - **Market asks AIS once** (`people.link`, through Hub) with proof the person
   is here: fresh signed Telegram evidence, or its own `sub` from a sign-in
   through AIS. AIS answers `unknown`, or the Bond reference with its current
-  `pub_dress`, if the registry lets Market see 0x1 links (`may_ask`).
+  `pub_dress`, if the registry lets Market see 0x1 links (`may_ask`). The
+  answer holds Market's own `sub` and the Bond, **never 0x1's pairwise
+  `sub`**: the Bond reference is 0x1's public account id, not a subject.
 - **From then on Market talks to 0x1, not to AIS.** It keeps the Bond
   reference with its own account for that person and names the Bond in every
   request to 0x1: the wallet's balance, the subscription, an order's
