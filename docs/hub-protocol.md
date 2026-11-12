@@ -20,6 +20,11 @@ Owner decisions, 2026-11-11:
 5. **One identifier per product**, the same everywhere: `0x1`, not `0x1` in
    one place and `nilx-one` in another.
 
+Owner decision, 2026-11-12:
+
+6. **No refund after activation.** Once an entitlement is `activated`, the
+   order is final ([refunds](#refunds)).
+
 ## Who owns what
 
 | Who          | Owns                                                                                       | Never owns                  |
@@ -212,7 +217,7 @@ Life of an order:
 ```text
 pending → paid → processing → fulfilled
         ↘ rejected            ↘ rejected (never after a debit)
-fulfilled → refunded (store or PSP refund; the issuer decides what it revokes)
+fulfilled → refunded   (only before activation, see below)
 ```
 
 For `seeds` the order goes straight from `pending` to `processing`: payment
@@ -246,8 +251,30 @@ issued → in_transit → stored → activated      (and revoked, after a refund
 In 0x1 this exists as `paid_special_items` (`paid`, `in_transit`, `stored`,
 `activated`): the paid Special is a thing collected at a Market point, carried
 in the grid, handed to the Avaia, and activated, which starts the subscription
-clock. What a refund revokes is an open decision in 0x1
-(`core/docs/subscriptions.md`).
+clock.
+
+## Refunds
+
+**There is no refund after activation** (owner decision, 2026-11-12).
+
+- **Before activation** (`issued`, `in_transit`, `stored`): a refund is
+  possible. The seller reports `order.refunded`. The issuer revokes the
+  entitlement: the thing leaves the grid, and for `seeds` the seeds go back to
+  the wallet. Both happen in one transaction keyed by the order id.
+- **After activation**: our own channels refuse. For `seeds` and `market_psp`
+  the seller does not offer a refund, and the hub rejects `order.refunded`
+  for an activated order with `already_activated`.
+- **App stores decide refunds themselves**, and we cannot stop them. When the
+  App Store asks for consumption information about a refund request, the
+  selling product answers that the content was delivered and used, with the
+  activation time. Google Play has no such step. If a store refunds anyway,
+  the hub records `order.refunded` with `after_activation: true` and **nothing
+  is taken back in the game**. What else to do about repeated store refunds
+  (for example, not selling to that account in the app again) is a later
+  decision.
+
+`core/docs/subscriptions.md` in `nilx-one/core` still calls early refunds an
+open authority decision; it takes this rule in its own change.
 
 ## End to end: Special for seeds, bought on Market
 
@@ -350,7 +377,7 @@ To build, each its own pull request:
    becomes `0x1` (it is not deployed and its users are wiped, so renaming now
    changes no live `sub`).
 3. **nilx-one/core**: claims; pull orders from the hub; accept a pass as the
-   recipient; App Store and Play verification for in-app purchases; events.
+   recipient; revoke before activation and refuse after it; App Store and Play verification for in-app purchases; events.
 4. **0xda-market**: sign in through AIS; resolve and ask through the hub;
    place orders in the hub.
 5. **prism**: `docs/ecosystem.md` names the hub's family role.
@@ -359,9 +386,7 @@ To build, each its own pull request:
 
 ## Open questions
 
-1. Refunds: what 0x1 revokes when a store or PSP refunds an order already
-   activated in the game.
-2. Whether the registry is edited by hand (configuration) or by an operator
+1. Whether the registry is edited by hand (configuration) or by an operator
    API in the hub.
 
 <!-- © 2026 aiaiaiai · aiaiaiai.org -->
