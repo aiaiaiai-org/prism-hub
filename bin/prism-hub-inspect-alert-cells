@@ -1,0 +1,40 @@
+#!/usr/bin/env ruby
+# © 2026 aiaiaiai · aiaiaiai.org
+# SPDX-License-Identifier: Apache-2.0
+
+# Read-only private diagnostic. Run inside the Hub production environment.
+# Never copy its output into public issues, PRs, or CI logs.
+ENV["RAILS_ENV"] ||= "production"
+require_relative "../config/environment"
+
+begin
+  workspace_ids = ARGV
+  unless workspace_ids.length.between?(1, 2) &&
+      workspace_ids.all? { |id| PrismHub::Domain::Channel::REFERENCE_PATTERN.match?(id) } &&
+      workspace_ids.uniq.length == workspace_ids.length
+    abort "usage: prism-hub-inspect-alert-cells WORKSPACE_ID [WORKSPACE_ID]"
+  end
+
+  subscriptions = PrismHub::Adapters::ActiveRecordAlertSubscriptionRepository.new
+  bindings = PrismHub::Adapters::ActiveRecordTelegramSurfaceBindingRepository.new
+  channel = ENV.fetch("PRISM_SIGNAL_ALERT_CHANNEL", "alerts")
+
+  results = workspace_ids.map do |workspace_id|
+    subscription = subscriptions.find(workspace_id: workspace_id)
+    binding = bindings.find_by_logical_context(workspace_id: workspace_id, logical_channel: channel)
+    {
+      workspace_id: workspace_id,
+      subscription_found: !subscription.nil?,
+      bound: !binding.nil?,
+      cell: subscription&.cell,
+      resolution: subscription ? 6 : nil,
+      categories: subscription&.categories,
+      include_nearby: subscription&.include_nearby,
+      updated_at: subscription&.updated_at&.iso8601
+    }
+  end
+  puts JSON.generate(results: results)
+rescue StandardError => error
+  warn JSON.generate(error: {code: "hub.alert_cells.inspect_failed", class: error.class.name})
+  exit 1
+end
