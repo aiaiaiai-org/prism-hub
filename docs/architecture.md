@@ -69,9 +69,8 @@ constructs an explicit migration context with all currently configured channels
 and capabilities. Merely setting `PRISM_HUB_API_TOKEN` does not activate it.
 
 A family product (`hub.v1`, [hub protocol](hub-protocol.md)) authenticates
-with a product token from AIS instead of a Hub credential. This needs no
-setting: AIS's address (`Bootstrap::AIS_ISSUER`) and Hub's audience
-(`prism-hub`) are constants, a fact of the family rather than of a deployment.
+with a product token from AIS instead of a Hub credential. The token audience
+is `prism-hub`.
 A bearer that looks like a JWT is first offered to `AisProductTokenVerifier`;
 if AIS does not vouch for it, it falls through to the scoped credentials and
 the legacy bridge exactly as before. The verifier checks the token against
@@ -86,6 +85,12 @@ for that principal form the `AuthorisationContext`. AIS says who the product
 is; Hub decides what it may do. The binding in the database is the switch: a
 principal without an `ais_client_id` is never reached this way, and one product
 binds at most one principal.
+
+A production Hub always verifies against `https://auth.aiaiaiai.org`. In
+`RAILS_ENV=development` or `test`, product authentication is unavailable
+until `PRISM_HUB_DEVELOPMENT_AIS_ISSUER` names a separate HTTPS origin.
+Use that AIS deployment's own signing keys and product grants. Hub uses the
+configured origin for both the issuer claim and the JWKS endpoint.
 
 ## Publication flow
 

@@ -53,7 +53,7 @@ module PrismHub
           credential_repository: credential_repository,
           clock: clock,
           **legacy_authentication(env, channels),
-          **product_authentication(logger)
+          **product_authentication(env, logger)
         )
 
         Interfaces::Http::App.new(
@@ -124,18 +124,41 @@ module PrismHub
         )
       end
 
-      # hub.v1: family products authenticate with AIS product tokens. The address of AIS is a fact
-      # of the family, not a deployment setting. It is consulted only for a bearer that looks like
-      # a JWT, and it can authenticate only a principal bound to a product (`ais_client_id`).
-      def product_authentication(logger)
+      # Both the token issuer and its JWKS must come from the same trust domain.
+      def product_authentication(env, logger)
+        issuer = product_issuer(env)
+        return {} unless issuer
+
         {
           product_token_verifier: Adapters::AisProductTokenVerifier.new(
-            issuer: AIS_ISSUER,
+            issuer: issuer,
             audience: AIS_AUDIENCE,
-            key_source: Adapters::HttpAisKeySource.new(issuer: AIS_ISSUER, logger: logger)
+            key_source: Adapters::HttpAisKeySource.new(issuer: issuer, logger: logger)
           ),
           principal_repository: Adapters::ActiveRecordServicePrincipalRepository.new
         }
+      end
+
+      def product_issuer(env)
+        environment = env.fetch("RAILS_ENV", "production")
+        development_issuer = env.fetch("PRISM_HUB_DEVELOPMENT_AIS_ISSUER", "")
+        if environment == "production"
+          return AIS_ISSUER if development_issuer.empty?
+
+          raise ConfigurationError.new("hub.ais_issuer.invalid", "production Hub uses the production AIS issuer")
+        end
+        unless %w[development test].include?(environment)
+          raise ConfigurationError.new("hub.ais_issuer.invalid", "unknown Hub environment")
+        end
+        return nil if development_issuer.empty?
+
+        # Require a canonical HTTPS origin. In particular, aliases with the
+        # production hostname spelled differently are not a separate issuer.
+        unless development_issuer.match?(/\Ahttps:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)+\z/) &&
+            ![AIS_ISSUER, "https://www.auth.aiaiaiai.org"].include?(development_issuer)
+          raise ConfigurationError.new("hub.ais_issuer.invalid", "development Hub needs an isolated HTTPS AIS origin")
+        end
+        development_issuer
       end
 
       def legacy_authentication(env, channels)
