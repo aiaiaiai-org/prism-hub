@@ -32,3 +32,5 @@ However, the owner did not see an updated board either. This needs independent v
 ## Release gate
 
 Do not change the audible-notification policy, geo radius, or source interpretation until a reproducible cause is established and negative controls rule out noisy city-wide alerts. The Nov 6 synthetic delivery acceptance (#56) bypassed ingestion/Fusion/fan-out and does not establish this incident's cause. Any code fix should live in the responsible repository, with tests and full CI before merge; deployment needs separate authorization.
+
+<!-- © 2026 aiaiaiai · aiaiaiai.org -->
