@@ -140,7 +140,7 @@ module PrismHub
       end
 
       def product_issuer(env)
-        environment = env.fetch("RAILS_ENV", "production")
+        environment = env.fetch("RAILS_ENV") { env.fetch("RACK_ENV", "development") }
         development_issuer = env.fetch("PRISM_HUB_DEVELOPMENT_AIS_ISSUER", "")
         if environment == "production"
           return AIS_ISSUER if development_issuer.empty?

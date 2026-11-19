@@ -6,13 +6,15 @@ class AisEnvironmentTest < Minitest::Test
   SETTING = "PRISM_HUB_DEVELOPMENT_AIS_ISSUER".freeze
 
   def test_production_pins_its_issuer
-    assert_equal "https://auth.aiaiaiai.org", issuer({})
+    assert_equal "https://auth.aiaiaiai.org", issuer({"RAILS_ENV" => "production"})
+    assert_equal "https://auth.aiaiaiai.org", issuer({"RACK_ENV" => "production"})
     assert_raises(PrismHub::ConfigurationError) do
       issuer({"RAILS_ENV" => "production", SETTING => "https://ais-dev.example"})
     end
   end
 
   def test_development_never_falls_back_to_production
+    assert_nil issuer({})
     %w[development test].each do |environment|
       assert_nil issuer({"RAILS_ENV" => environment})
       assert_equal "https://ais-dev.example",
