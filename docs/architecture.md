@@ -69,9 +69,8 @@ constructs an explicit migration context with all currently configured channels
 and capabilities. Merely setting `PRISM_HUB_API_TOKEN` does not activate it.
 
 A family product (`hub.v1`, [hub protocol](hub-protocol.md)) authenticates
-with a product token from AIS instead of a Hub credential. This needs no
-setting: AIS's address (`Bootstrap::AIS_ISSUER`) and Hub's audience
-(`prism-hub`) are constants, a fact of the family rather than of a deployment.
+with a product token from AIS instead of a Hub credential. The token audience
+is `prism-hub`.
 A bearer that looks like a JWT is first offered to `AisProductTokenVerifier`;
 if AIS does not vouch for it, it falls through to the scoped credentials and
 the legacy bridge exactly as before. The verifier checks the token against
@@ -86,6 +85,17 @@ for that principal form the `AuthorisationContext`. AIS says who the product
 is; Hub decides what it may do. The binding in the database is the switch: a
 principal without an `ais_client_id` is never reached this way, and one product
 binds at most one principal.
+
+The trust environment is declared by `PRISM_HUB_AIS_ENVIRONMENT` (`production` or
+`development`), not inferred from the Rails mode: the shipped image is always
+`RAILS_ENV=production`. Undeclared, a production Rails mode verifies against
+`https://auth.aiaiaiai.org` and a local development or test mode accepts no AIS
+product token. A development Hub declares `development`; it then accepts product
+tokens only once `PRISM_HUB_DEVELOPMENT_AIS_ISSUER` names a separate HTTPS
+origin, and never falls back to production. Declaring `production` with a
+development origin, or an unknown value, stops startup. Use the development AIS
+deployment's own signing keys and product grants. Hub uses the configured origin
+for both the issuer claim and the JWKS endpoint.
 
 ## Publication flow
 
