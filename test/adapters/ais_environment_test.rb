@@ -3,62 +3,40 @@
 require_relative "../test_helper"
 
 class AisEnvironmentTest < Minitest::Test
-  SETTING = "PRISM_HUB_DEVELOPMENT_AIS_ISSUER".freeze
-  DECLARED = "PRISM_HUB_AIS_ENVIRONMENT".freeze
+  SETTING = "PRISM_HUB_AIS_ISSUER".freeze
   PRODUCTION = "https://auth.aiaiaiai.org".freeze
   DEVELOPMENT = "https://ais-dev.example".freeze
   NOW = Time.utc(2026, 11, 20, 7, 0, 0)
 
-  def test_production_pins_its_issuer
-    assert_equal PRODUCTION, issuer({"RAILS_ENV" => "production"})
-    assert_equal PRODUCTION, issuer({"RACK_ENV" => "production"})
-    assert_equal PRODUCTION, issuer({"RAILS_ENV" => "development", DECLARED => "production"})
-    assert_raises(PrismHub::ConfigurationError) do
-      issuer({"RAILS_ENV" => "production", SETTING => DEVELOPMENT})
-    end
-    assert_raises(PrismHub::ConfigurationError) do
-      issuer({"RAILS_ENV" => "production", DECLARED => "production", SETTING => DEVELOPMENT})
+  def test_without_the_setting_no_ais_token_is_accepted_whatever_the_rails_mode
+    [{}, {"RAILS_ENV" => "production"}, {"RAILS_ENV" => "development"}, {"RAILS_ENV" => "test"}, {SETTING => ""}].each do |env|
+      assert_nil issuer(env), env.inspect
     end
   end
 
-  def test_local_development_never_falls_back_to_production
-    assert_nil issuer({})
-    %w[development test].each do |environment|
-      assert_nil issuer({"RAILS_ENV" => environment})
-      assert_equal DEVELOPMENT, issuer({"RAILS_ENV" => environment, SETTING => DEVELOPMENT})
-    end
-  end
-
-  # The shipped image is RAILS_ENV=production for every workload, development included.
-  def test_a_development_hub_on_the_production_image_declares_its_trust_environment
-    image = {"RAILS_ENV" => "production", DECLARED => "development"}
-    assert_equal DEVELOPMENT, issuer(image.merge(SETTING => DEVELOPMENT))
-    assert_nil issuer(image), "a missing development origin accepts no AIS token, not production"
-    assert_nil issuer(image.merge(SETTING => ""))
-  end
-
-  def test_an_unknown_or_malformed_declaration_stops_startup
-    ["Production", "prod", "staging", " development", "development "].each do |declared|
-      assert_raises(PrismHub::ConfigurationError, declared) do
-        issuer({"RAILS_ENV" => "production", DECLARED => declared})
+  def test_the_setting_alone_names_the_trusted_origin_in_every_rails_mode
+    [PRODUCTION, DEVELOPMENT].each do |origin|
+      [{}, {"RAILS_ENV" => "production"}, {"RAILS_ENV" => "development"}].each do |mode|
+        assert_equal origin, issuer(mode.merge(SETTING => origin))
       end
     end
-    assert_raises(PrismHub::ConfigurationError) { issuer({"RAILS_ENV" => "staging"}) }
   end
 
-  def test_refuses_production_and_noncanonical_origins
+  def test_refuses_noncanonical_origins
     %w[
-      https://auth.aiaiaiai.org
-      https://www.auth.aiaiaiai.org
       https://AUTH.aiaiaiai.org
       https://auth.aiaiaiai.org.
-      https://ais-dev.example/path
-      https://ais-dev.example?query
+      https://auth.aiaiaiai.org/path
+      https://auth.aiaiaiai.org/
+      https://auth.aiaiaiai.org?query
+      https://auth.aiaiaiai.org:8443
       https://ais-dev.example@auth.aiaiaiai.org
       http://ais-dev.example
+      ais-dev.example
+      localhost
     ].each do |origin|
       assert_raises(PrismHub::ConfigurationError, origin) do
-        issuer({"RAILS_ENV" => "production", DECLARED => "development", SETTING => origin})
+        issuer({"RAILS_ENV" => "production", SETTING => origin})
       end
     end
   end

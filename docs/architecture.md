@@ -86,16 +86,11 @@ is; Hub decides what it may do. The binding in the database is the switch: a
 principal without an `ais_client_id` is never reached this way, and one product
 binds at most one principal.
 
-The trust environment is declared by `PRISM_HUB_AIS_ENVIRONMENT` (`production` or
-`development`), not inferred from the Rails mode: the shipped image is always
-`RAILS_ENV=production`. Undeclared, a production Rails mode verifies against
-`https://auth.aiaiaiai.org` and a local development or test mode accepts no AIS
-product token. A development Hub declares `development`; it then accepts product
-tokens only once `PRISM_HUB_DEVELOPMENT_AIS_ISSUER` names a separate HTTPS
-origin, and never falls back to production. Declaring `production` with a
-development origin, or an unknown value, stops startup. Use the development AIS
-deployment's own signing keys and product grants. Hub uses the configured origin
-for both the issuer claim and the JWKS endpoint.
+Hub trusts exactly one AIS origin, `PRISM_HUB_AIS_ISSUER`, for both the issuer claim and the
+JWKS endpoint. It has no default and does not depend on the Rails mode: unset, no AIS product
+token is accepted, so a missing setting fails closed and never falls back to another AIS. A
+deployment sets its own AIS origin, with that AIS's own signing keys and product grants. The
+value must be a canonical HTTPS origin; anything else stops startup.
 
 ## Publication flow
 
