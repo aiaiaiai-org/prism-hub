@@ -53,7 +53,7 @@ module PrismHub
           credential_repository: credential_repository,
           clock: clock,
           **legacy_authentication(env, channels),
-          **product_authentication(env, logger)
+          **product_authentication(logger)
         )
 
         Interfaces::Http::App.new(
@@ -124,65 +124,18 @@ module PrismHub
         )
       end
 
-      # Both the token issuer and its JWKS must come from the same trust domain.
-      def product_authentication(env, logger)
-        issuer = product_issuer(env)
-        return {} unless issuer
-
+      # hub.v1: family products authenticate with AIS product tokens. The address of AIS is a fact
+      # of the family, not a deployment setting. It is consulted only for a bearer that looks like
+      # a JWT, and it can authenticate only a principal bound to a product (`ais_client_id`).
+      def product_authentication(logger)
         {
           product_token_verifier: Adapters::AisProductTokenVerifier.new(
-            issuer: issuer,
+            issuer: AIS_ISSUER,
             audience: AIS_AUDIENCE,
-            key_source: Adapters::HttpAisKeySource.new(issuer: issuer, logger: logger)
+            key_source: Adapters::HttpAisKeySource.new(issuer: AIS_ISSUER, logger: logger)
           ),
           principal_repository: Adapters::ActiveRecordServicePrincipalRepository.new
         }
-      end
-
-      # The AIS trust environment is a deployment declaration, not the Rails mode: the shipped image
-      # is always RAILS_ENV=production, development included. Development trust is never inferred
-      # from, and never falls back to, production: without a configured isolated origin, no AIS
-      # product token is accepted.
-      def product_issuer(env)
-        development_issuer = env.fetch("PRISM_HUB_DEVELOPMENT_AIS_ISSUER", "")
-        case ais_environment(env)
-        when "production"
-          return AIS_ISSUER if development_issuer.empty?
-
-          raise ConfigurationError.new(
-            "hub.ais_issuer.invalid",
-            "a development AIS origin needs PRISM_HUB_AIS_ENVIRONMENT=development"
-          )
-        when "development"
-          development_issuer.empty? ? nil : development_origin(development_issuer)
-        end
-      end
-
-      # Undeclared, the Rails mode decides, as before: a production Hub keeps its pinned issuer
-      # and a local development or test Hub accepts none. A development workload on the production
-      # image must declare `development`.
-      def ais_environment(env)
-        declared = env.fetch("PRISM_HUB_AIS_ENVIRONMENT", "")
-        return declared if %w[production development].include?(declared)
-        unless declared.empty?
-          raise ConfigurationError.new("hub.ais_environment.invalid", "PRISM_HUB_AIS_ENVIRONMENT must be production or development")
-        end
-
-        case env.fetch("RAILS_ENV") { env.fetch("RACK_ENV", "development") }
-        when "production" then "production"
-        when "development", "test" then "development"
-        else raise ConfigurationError.new("hub.ais_issuer.invalid", "unknown Hub environment")
-        end
-      end
-
-      # Require a canonical HTTPS origin. In particular, aliases with the
-      # production hostname spelled differently are not a separate issuer.
-      def development_origin(origin)
-        unless origin.match?(/\Ahttps:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)+\z/) &&
-            ![AIS_ISSUER, "https://www.auth.aiaiaiai.org"].include?(origin)
-          raise ConfigurationError.new("hub.ais_issuer.invalid", "development Hub needs an isolated HTTPS AIS origin")
-        end
-        origin
       end
 
       def legacy_authentication(env, channels)
