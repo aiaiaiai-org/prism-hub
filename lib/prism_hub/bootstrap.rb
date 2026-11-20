@@ -2,6 +2,7 @@
 
 module PrismHub
   class Bootstrap
+    AIS_ISSUER = "https://auth.aiaiaiai.org".freeze
     AIS_AUDIENCE = "prism-hub".freeze
 
     class << self
@@ -52,7 +53,7 @@ module PrismHub
           credential_repository: credential_repository,
           clock: clock,
           **legacy_authentication(env, channels),
-          **product_authentication(env, logger)
+          **product_authentication(logger)
         )
 
         Interfaces::Http::App.new(
@@ -123,34 +124,18 @@ module PrismHub
         )
       end
 
-      # Both the token issuer and its JWKS must come from the same trust domain.
-      def product_authentication(env, logger)
-        issuer = product_issuer(env)
-        return {} unless issuer
-
+      # hub.v1: family products authenticate with AIS product tokens. The address of AIS is a fact
+      # of the family, not a deployment setting. It is consulted only for a bearer that looks like
+      # a JWT, and it can authenticate only a principal bound to a product (`ais_client_id`).
+      def product_authentication(logger)
         {
           product_token_verifier: Adapters::AisProductTokenVerifier.new(
-            issuer: issuer,
+            issuer: AIS_ISSUER,
             audience: AIS_AUDIENCE,
-            key_source: Adapters::HttpAisKeySource.new(issuer: issuer, logger: logger)
+            key_source: Adapters::HttpAisKeySource.new(issuer: AIS_ISSUER, logger: logger)
           ),
           principal_repository: Adapters::ActiveRecordServicePrincipalRepository.new
         }
-      end
-
-      # The one AIS origin this Hub trusts, for the token issuer and its JWKS alike. It comes from the
-      # deployment, never from the Rails mode (the image is RAILS_ENV=production everywhere) and
-      # never from a built-in default: without it, no AIS product token is accepted.
-      def product_issuer(env)
-        issuer = env.fetch("PRISM_HUB_AIS_ISSUER", "")
-        return nil if issuer.empty?
-
-        # A canonical HTTPS origin only: no path, query, userinfo, port, uppercase or trailing dot,
-        # so two spellings of one host cannot be mistaken for two issuers.
-        unless issuer.match?(/\Ahttps:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)+\z/)
-          raise ConfigurationError.new("hub.ais_issuer.invalid", "PRISM_HUB_AIS_ISSUER must be a canonical HTTPS origin")
-        end
-        issuer
       end
 
       def legacy_authentication(env, channels)
