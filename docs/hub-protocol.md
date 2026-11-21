@@ -151,6 +151,50 @@ copy of one.
 8. **`hub.v1` only grows.** A breaking change is `hub.v2`, run in parallel
    until every product has moved.
 
+## Signed Bond interaction traffic: trust versus completion
+
+Prism transit is **not a third Bond** and is never the service that signs,
+closes, notarizes or stores a private `bond.chain`. This remains true for
+requests that contain a buyer's signed Intent, a marketplace response and a
+digital settlement/fulfillment receipt.
+
+A family product supplies its **own AIS-issued product credential** with the
+intended target service and operation. The transit verifier validates issuer,
+signature, audience, expiry, caller identity and the relevant service grants;
+it does **not** trust a Boolean `verified` stamp asserted by a caller or an
+unverified request header. Normal identity/authority lookups go through this
+relay, while direct OIDC/JWKS/product-token bootstrap at AIS remains the
+explicit exception already documented above.
+
+The relay routes an opaque, versioned operation envelope and may check only
+the bounded routing metadata needed for authorization and delivery. It
+MUST NOT need to decrypt a private Bond intent or examine the item SKU,
+price, signed content, receipt details or Chain history simply to route.
+It MUST NOT store payloads or user relationship data. An AIS-issued,
+audience-scoped person or authority attestation can accompany a request when
+its contract calls for one; the destination still independently verifies
+the attestation and applies its own operation and domain authorization.
+
+The target (for example `0xda-market`) validates the specific buyer action,
+performs only its owned work, and returns its own authorized result and
+evidence using the original correlation and idempotency identity. A product
+or relay signature authenticates that product's communication; it MUST NOT
+be presented as a customer's `sk_bond` signature or a human
+representative's Business Bond signature.
+
+**Neither a second signature nor a successful delivery is a universal
+Chain-completion predicate.** The interaction-owning contract defines the
+required counterpart action, result evidence and terminal outcome. The two
+participating Core runtimes can independently verify the same terminal
+history; the relay never emits a `chain.close` instruction. A missing
+`RECEIVE` or another required action remains missing even if all transport
+hops succeeded. Any automatic digital-purchase completion requires a
+separately authorized 0x1 contract and cannot be enabled by routing policy.
+
+This section is a boundary clarification, not a claim that end-to-end
+Bond signatures, attestation delegation or digital auto-completion are
+implemented in `hub.v1`.
+
 ## Credentials
 
 - **People** sign in only through AIS, directly (the front door): OIDC code
