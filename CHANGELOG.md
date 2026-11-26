@@ -6,6 +6,13 @@ All notable changes to Prism Hub will be documented here.
 
 ### Changed
 
+- A queued notification that waited longer than its useful life is retired unsent. The delivery worker marks
+  every undelivered outbox entry older than `PRISM_DELIVERY_WORKER_MAX_AGE_SECONDS` (default 21600, six
+  hours, counted from when it was queued, not from its last retry) as `expired` before it claims work, in
+  one statement, and logs `hub.delivery.expired` with the count. After an outage of the bot or of the hub the
+  backlog is no longer delivered all at once; the entries stay in `delivery_outbox_entries` with
+  `last_error_code = 'hub.delivery.expired'`. A migration adds `expired` to the status constraint. Mail
+  digests older than the maximum age are retired the same way.
 - Delivery moved to `aiaiaiai-org/infra`'s pull model: `Publish image` pushes and attests
   each Full CI-verified `master` head, and infra deploys it. `Deploy production`,
   `Deploy Prism PostgreSQL`, the infra recipient scripts and `INFRA_DEPLOY_TOKEN` are removed;

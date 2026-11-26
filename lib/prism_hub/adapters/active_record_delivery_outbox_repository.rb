@@ -8,6 +8,8 @@ module PrismHub
       STATUS_PROCESSING = "processing".freeze
       STATUS_DELIVERED = "delivered".freeze
       STATUS_FAILED = "failed".freeze
+      STATUS_EXPIRED = "expired".freeze
+      EXPIRED_ERROR_CODE = "hub.delivery.expired".freeze
 
       def enqueue(request:, available_at:)
         validate_request!(request)
@@ -55,6 +57,27 @@ module PrismHub
         end
 
         records
+      end
+
+      # A notification that waited longer than its useful life is not sent late: after an outage of the bot or
+      # of the hub the backlog would otherwise reach people all at once. Age counts from when it was queued,
+      # not from its last retry. One statement, so a large backlog is retired in a single pass.
+      def expire_stale(older_than:, now:, lease_seconds:)
+        cutoff = normalized_time(older_than, "older_than")
+        timestamp = normalized_time(now, "now")
+        lock_cutoff = timestamp - positive_integer(lease_seconds, "lease_seconds")
+
+        ActiveRecordRecords::DeliveryOutboxEntry
+          .where("created_at < ?", cutoff)
+          .where("status = ? OR (status = ? AND locked_at <= ?)", STATUS_PENDING, STATUS_PROCESSING, lock_cutoff)
+          .update_all(
+            status: STATUS_EXPIRED,
+            locked_at: nil,
+            lock_token: nil,
+            failed_at: timestamp,
+            last_error_code: EXPIRED_ERROR_CODE,
+            updated_at: timestamp
+          )
       end
 
       def mark_delivered(id:, lock_token:, delivered_at:)

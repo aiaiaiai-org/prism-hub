@@ -4,6 +4,25 @@
 require_relative "../test_helper"
 
 class DeliveryOutboxEntryTest < Minitest::Test
+  def test_an_expired_entry_is_a_settled_undelivered_state
+    entry = PrismHub::Domain::DeliveryOutboxEntry.new(
+      id: "outbox-2", workspace: "personal", channel: "digest", idempotency_key: "1" * 64,
+      intent_payload: {"schema_version" => "prism-hub.delivery-request.v1", "artifact" => {"payload" => {}}},
+      status: "expired", attempts: 3, available_at: Time.utc(2026, 9, 14, 2),
+      failed_at: Time.utc(2026, 9, 14, 9), last_error_code: "hub.delivery.expired"
+    )
+
+    assert_equal "expired", entry.status
+    refute entry.due?(now: Time.utc(2026, 9, 15))
+    assert_raises(PrismHub::InputError) do
+      PrismHub::Domain::DeliveryOutboxEntry.new(
+        id: "outbox-3", workspace: "personal", channel: "digest", idempotency_key: "2" * 64,
+        intent_payload: {"schema_version" => "prism-hub.delivery-request.v1", "artifact" => {"payload" => {}}},
+        status: "expired", attempts: 3, available_at: Time.utc(2026, 9, 14, 2), delivered_at: Time.utc(2026, 9, 14, 3)
+      )
+    end
+  end
+
   def test_the_persisted_payload_cannot_be_rewritten_after_construction
     entry = PrismHub::Domain::DeliveryOutboxEntry.new(
       id: "outbox-1", workspace: "personal", channel: "digest",

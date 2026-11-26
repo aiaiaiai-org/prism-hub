@@ -12,6 +12,12 @@ module PrismHub
         raise NotImplementedError
       end
 
+      # Retires, without sending, every entry created before `older_than` that has not been delivered: a
+      # pending one, or one whose lease ran out. Returns how many were retired.
+      def expire_stale(older_than:, now:, lease_seconds:)
+        raise NotImplementedError
+      end
+
       def mark_delivered(id:, lock_token:, delivered_at:)
         raise NotImplementedError
       end

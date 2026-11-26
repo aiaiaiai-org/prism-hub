@@ -6,23 +6,35 @@ module PrismHub
     class ProcessDeliveryOutbox
       DEFAULT_RETRY_SECONDS = 30
       DEFAULT_RATE_LIMIT_RETRY_SECONDS = 60
+      # A notification older than this is retired unsent (six hours, the owner's decision of 2026-11-26).
+      DEFAULT_MAX_AGE_SECONDS = 6 * 60 * 60
 
-      def initialize(outbox_repository:, dispatch_delivery:, clock: -> { Time.now.utc }, retry_seconds: DEFAULT_RETRY_SECONDS, rate_limit_retry_seconds: DEFAULT_RATE_LIMIT_RETRY_SECONDS, view_receipts: Ports::DeliveryViewReceipts.new)
+      def initialize(outbox_repository:, dispatch_delivery:, clock: -> { Time.now.utc }, retry_seconds: DEFAULT_RETRY_SECONDS, rate_limit_retry_seconds: DEFAULT_RATE_LIMIT_RETRY_SECONDS, view_receipts: Ports::DeliveryViewReceipts.new, max_age_seconds: DEFAULT_MAX_AGE_SECONDS, logger: nil)
         @outbox_repository = outbox_repository
         @dispatch_delivery = dispatch_delivery
         @view_receipts = view_receipts
         @clock = clock
         @retry_seconds = positive_integer(retry_seconds, "retry_seconds")
         @rate_limit_retry_seconds = positive_integer(rate_limit_retry_seconds, "rate_limit_retry_seconds")
+        @max_age_seconds = positive_integer(max_age_seconds, "max_age_seconds")
+        @logger = logger
       end
 
       def call(limit:, lease_seconds:)
         now = @clock.call.utc
+        expire_stale(now, lease_seconds)
         entries = @outbox_repository.claim_due(limit: limit, now: now, lease_seconds: lease_seconds)
         entries.map { |entry| process(entry) }.freeze
       end
 
       private
+
+      def expire_stale(now, lease_seconds)
+        expired = @outbox_repository.expire_stale(older_than: now - @max_age_seconds, now: now, lease_seconds: lease_seconds)
+        return unless expired.to_i.positive?
+
+        @logger&.warn(JSON.generate(event: "hub.delivery.expired", count: expired, max_age_seconds: @max_age_seconds))
+      end
 
       def process(entry)
         request = Domain::DeliveryRequest.from_h(entry.intent_payload)
