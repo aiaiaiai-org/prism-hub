@@ -5,14 +5,23 @@ require_relative "../test_helper"
 
 class ProcessDeliveryOutboxTest < Minitest::Test
   class Repository
-    attr_reader :claimed, :delivered, :failed
+    attr_reader :claimed, :delivered, :failed, :expired_call, :calls
 
-    def initialize(entries)
+    def initialize(entries, expired: 0)
       @entries = entries
       @claimed = false
+      @expired = expired
+      @calls = []
+    end
+
+    def expire_stale(older_than:, now:, lease_seconds:)
+      @calls << :expire_stale
+      @expired_call = {older_than: older_than, now: now, lease_seconds: lease_seconds}
+      @expired
     end
 
     def claim_due(limit:, now:, lease_seconds:)
+      @calls << :claim_due
       @claimed = [limit, now, lease_seconds]
       @entries
     end
@@ -132,6 +141,51 @@ class ProcessDeliveryOutboxTest < Minitest::Test
     processor.call(limit: 1, lease_seconds: 300)
 
     assert_equal @now + 17, repository.failed[:retry_at]
+  end
+
+  def test_a_notification_older_than_six_hours_is_retired_before_anything_is_claimed
+    repository = Repository.new([@entry])
+    processor = PrismHub::UseCases::ProcessDeliveryOutbox.new(
+      outbox_repository: repository, dispatch_delivery: Dispatcher.new, clock: -> { @now }
+    )
+
+    processor.call(limit: 1, lease_seconds: 300)
+
+    assert_equal [:expire_stale, :claim_due], repository.calls
+    assert_equal({older_than: @now - 6 * 60 * 60, now: @now, lease_seconds: 300}, repository.expired_call)
+  end
+
+  def test_the_maximum_age_is_configurable_and_must_be_positive
+    repository = Repository.new([])
+    PrismHub::UseCases::ProcessDeliveryOutbox.new(
+      outbox_repository: repository, dispatch_delivery: Dispatcher.new, clock: -> { @now }, max_age_seconds: 900
+    ).call(limit: 1, lease_seconds: 300)
+    assert_equal @now - 900, repository.expired_call[:older_than]
+
+    assert_raises(PrismHub::ConfigurationError) do
+      PrismHub::UseCases::ProcessDeliveryOutbox.new(
+        outbox_repository: repository, dispatch_delivery: Dispatcher.new, max_age_seconds: 0
+      )
+    end
+  end
+
+  def test_retiring_notifications_is_logged_with_the_count_and_never_when_there_is_nothing_to_retire
+    output = StringIO.new
+    logger = Logger.new(output)
+    build = ->(expired) do
+      PrismHub::UseCases::ProcessDeliveryOutbox.new(
+        outbox_repository: Repository.new([], expired: expired), dispatch_delivery: Dispatcher.new,
+        clock: -> { @now }, logger: logger
+      )
+    end
+
+    build.call(0).call(limit: 1, lease_seconds: 300)
+    assert_equal "", output.string
+
+    build.call(42).call(limit: 1, lease_seconds: 300)
+    assert_includes output.string, '"event":"hub.delivery.expired"'
+    assert_includes output.string, '"count":42'
+    assert_includes output.string, '"max_age_seconds":21600'
   end
 
   private

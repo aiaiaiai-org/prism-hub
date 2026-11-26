@@ -4,7 +4,7 @@
 module PrismHub
   module Domain
     class DeliveryOutboxEntry
-      STATUSES = %w[pending processing delivered failed].freeze
+      STATUSES = %w[pending processing delivered failed expired].freeze
       IDEMPOTENCY_KEY_PATTERN = /\A[0-9a-f]{64}\z/
 
       attr_reader :id, :workspace, :channel, :idempotency_key, :intent_payload,
